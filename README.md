@@ -5,6 +5,9 @@ This Python program captures images from a camera feed, applies a Fourier transf
 This can be used to explain concepts such as the Fourier Transform, but also scattering and diffraction effects, 
 if the lecturer shows printouts of the library of shapes and arrays in front of the camera. 
 
+<img width="806" alt="image" src="https://github.com/user-attachments/assets/1a6b2f9b-a5c9-4ac3-900e-31de1161e004">
+
+
 ## Prerequisites
 Ensure you have Python 3.12 or above installed.
 
