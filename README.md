@@ -42,4 +42,4 @@ Press "q" to exit the application
 - Tested on MacOS and Linux environments.
 
 ## License
-This project is licensed under the GPLv3+ license.
+This project is licensed under the Apache-2.0 license.
