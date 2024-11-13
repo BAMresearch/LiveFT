@@ -14,8 +14,7 @@ For command-line options, use:
 
 press "q" to exit the application
     
-Author: Brian R. Pauw
-Updated by OpenAI
+Author: Brian R. Pauw with some suggestions from AI
 Contact: brian@stack.nl
 License: GPLv3+
 """
@@ -38,13 +37,13 @@ def parse_args() -> argparse.Namespace:
     # parser.add_argument("-o", "--nContrIms", type=int, default=30, help="Calculate average contrast over N images")
     parser.add_argument("-d", "--camDevice", type=int, default=0, help="Camera device ID")
     parser.add_argument("-i", "--imAvgs", type=int, default=1, help="Average N images for display and FFT")
-    parser.add_argument("-y", "--vScale", type=float, default=1.0, help="Vertical video scale")
-    parser.add_argument("-x", "--hScale", type=float, default=1.0, help="Horizontal video scale")
+    parser.add_argument("-y", "--vScale", type=float, default=1.2, help="Vertical video scale")
+    parser.add_argument("-x", "--hScale", type=float, default=1.2, help="Horizontal video scale")
     parser.add_argument("-p", "--downScale", action="store_true", help="Enable pyramidal downscaling")
     parser.add_argument("-k", "--killCenterLines", action="store_true", help="Remove central lines from FFT image")
-    parser.add_argument("-f", "--figid", type=str, default="liveFFT", help="Image window name")
-    parser.add_argument("-r", "--rows", type=int, default=400, help="Use center N rows of video")
-    parser.add_argument("-c", "--columns", type=int, default=400, help="Use center N columns of video")
+    parser.add_argument("-f", "--figid", type=str, default="liveFFT by Brian R. Pauw - press 'q' to exit.", help="Image window name")
+    parser.add_argument("-r", "--rows", type=int, default=500, help="Use center N rows of video")
+    parser.add_argument("-c", "--columns", type=int, default=500, help="Use center N columns of video")
     # parser.add_argument("-P", "--plot", action="store_true", help="Enable a separate 1D plot window")
 
     return parser.parse_args()
@@ -63,7 +62,7 @@ class LiveFT:
     hScale: float = field(default=1.0, metadata={"help": "Horizontal video scale"})
     downScale: bool = field(default=False, metadata={"help": "Enable pyramidal downscaling"})
     killCenterLines: bool = field(default=False, metadata={"help": "Remove central lines from FFT image"})
-    figid: str = field(default="liveFFT", metadata={"help": "Image window name"})
+    figid: str = field(default="liveFFT by Brian R. Pauw - press 'q' to exit.", metadata={"help": "Image window name"})
     rows: int = field(default=400, metadata={"help": "Use center N rows of video"})
     columns: int = field(default=400, metadata={"help": "Use center N columns of video"})
 
@@ -90,7 +89,7 @@ class LiveFT:
             raise ValueError("Could not open video device.")
         
         # Initialize display window
-        cv2.namedWindow(self.figid, cv2.WINDOW_NORMAL)
+        cv2.namedWindow(self.figid, cv2.WINDOW_GUI_NORMAL | cv2.WINDOW_NORMAL)
         cv2.resizeWindow(self.figid, 1024, 768)
 
         # Capture first frame to determine frame shape
@@ -140,6 +139,11 @@ class LiveFT:
             # Capture key press to close window (e.g., 'q' key)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 print("Exiting on user request.")
+                break
+
+            # Check if the window is still open, break if closed
+            if not cv2.getWindowProperty(self.figid, cv2.WND_PROP_VISIBLE):
+                print("Window closed by user.")
                 break
 
             fps = 1 / (time.time() - start_time)
