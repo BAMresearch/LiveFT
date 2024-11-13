@@ -16,7 +16,7 @@ press "q" to exit the application
     
 Author: Brian R. Pauw with some suggestions from AI
 Contact: brian@stack.nl
-License: GPLv3+
+License: Apache-2.0
 """
 
 from typing import Any, Tuple
