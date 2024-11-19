@@ -174,10 +174,6 @@ class LiveFT:
         # normalize and convert to numpy array
         frame = (frame_tensor / frame_tensor.max()).cpu().numpy().clip(0, 1)
 
-        # if fft_image.ndim ==2: 
-        #     fft_image = cv2.cvtColor(fft_image, cv2.COLOR_GRAY2BGR)
-        # print(f'{frame.shape=}, {fft_image.shape=}, {np.concatenate((frame, fft_image), axis=1).shape=}')
-        # Display the original and FFT-transformed images side-by-side
         cv2.imshow(self.figid, np.concatenate((frame, fft_image), axis=1))
         return
         # return self.contrast
@@ -190,13 +186,26 @@ class LiveFT:
         # Scale frame dimensions if necessary
         if self.vScale != 1 or self.hScale != 1:
             frame = cv2.resize(frame, None, fx=self.hScale, fy=self.vScale)
-        # average and clip
-        # frame = frame.mean(axis=2)
-        # frame = (frame / frame.max()).clip(0, 1)
-        # convert frame to greyscale: 
+ 
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         # convert to torch tensor
         frame_tensor = torch.tensor(frame, device=self.device)
+
+        # Apply an error function window
+        h, w = frame_tensor.shape
+        y = torch.linspace(-1.0, 1.0, h, device=self.device)
+        x = torch.linspace(-1.0, 1.0, w, device=self.device)
+        x, y = torch.meshgrid(x, y)
+        
+        # Create a window using the error function
+        taper_width = 0.2  # Adjust the taper width as necessary
+        window_x = torch.erf((x + 1) / taper_width) * torch.erf((1 - x) / taper_width)
+        window_y = torch.erf((y + 1) / taper_width) * torch.erf((1 - y) / taper_width)
+        window = window_x * window_y
+        
+        # Apply the window to the frame
+        frame_tensor *= window
+        
         # expand range:
         frame_tensor = (frame_tensor - frame_tensor.min()) / (frame_tensor.max() - frame_tensor.min()).cpu()
 
