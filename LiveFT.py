@@ -192,7 +192,7 @@ class LiveFT:
         frame_tensor = torch.tensor(frame, device=self.device)
 
         # Apply an error function window
-        h, w = frame_tensor.shape
+        w, h = frame_tensor.shape
         y = torch.linspace(-1.0, 1.0, h, device=self.device)
         x = torch.linspace(-1.0, 1.0, w, device=self.device)
         x, y = torch.meshgrid(x, y)
