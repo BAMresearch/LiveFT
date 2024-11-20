@@ -192,10 +192,10 @@ class LiveFT:
         frame_tensor = torch.tensor(frame, device=self.device)
 
         # Apply an error function window
-        w, h = frame_tensor.shape
+        h, w = frame_tensor.shape
         y = torch.linspace(-1.0, 1.0, h, device=self.device)
         x = torch.linspace(-1.0, 1.0, w, device=self.device)
-        x, y = torch.meshgrid(x, y)
+        x, y = torch.meshgrid(x, y, indexing='xy')
         
         # Create a window using the error function
         taper_width = 0.2  # Adjust the taper width as necessary
