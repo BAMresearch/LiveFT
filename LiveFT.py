@@ -27,6 +27,8 @@ import cv2
 import argparse
 from attrs import define, field, validators
 
+vidCropDefault = (500, 500) # width x height
+
 # Function to parse arguments for the script
 def parse_args() -> argparse.Namespace:
     """Parses command-line arguments."""
@@ -41,8 +43,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("-p", "--downScale", action="store_true", help="Enable pyramidal downscaling")
     parser.add_argument("-k", "--killCenterLines", action="store_true", help="Remove central lines from FFT image")
     parser.add_argument("-f", "--figid", type=str, default="liveFFT by Brian R. Pauw - press 'q' to exit.", help="Image window name")
-    parser.add_argument("-r", "--rows", type=int, default=500, help="Use center N rows of video")
-    parser.add_argument("-c", "--columns", type=int, default=500, help="Use center N columns of video")
+    parser.add_argument("-r", "--rows", type=int, default=vidCropDefault[1], help="Use center N rows of video")
+    parser.add_argument("-c", "--columns", type=int, default=vidCropDefault[0], help="Use center N columns of video")
     # parser.add_argument("-P", "--plot", action="store_true", help="Enable a separate 1D plot window")
 
     return parser.parse_args()
@@ -62,8 +64,8 @@ class LiveFT:
     downScale: bool = field(default=False, metadata={"help": "Enable pyramidal downscaling"})
     killCenterLines: bool = field(default=False, metadata={"help": "Remove central lines from FFT image"})
     figid: str = field(default="liveFFT by Brian R. Pauw - press 'q' to exit.", metadata={"help": "Image window name"})
-    rows: int = field(default=400, metadata={"help": "Use center N rows of video"})
-    columns: int = field(default=400, metadata={"help": "Use center N columns of video"})
+    rows: int = field(default=vidCropDefault[1], metadata={"help": "Use center N rows of video"})
+    columns: int = field(default=vidCropDefault[0], metadata={"help": "Use center N columns of video"})
 
     # Derived attributes initialized post-instantiation
     device: torch.device = field(init=False, validator=validators.instance_of(torch.device))
