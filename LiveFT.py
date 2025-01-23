@@ -27,45 +27,32 @@ import cv2
 import argparse
 from attrs import define, field, validators
 
-vidCropDefault = (500, 500) # width x height
-
-# Function to parse arguments for the script
-def parse_args() -> argparse.Namespace:
-    """Parses command-line arguments."""
-    parser = argparse.ArgumentParser(description="Live Fourier Transform of camera feed.")
-    parser.add_argument("-n", "--numShots", type=int, default=1e5, help="Max. number of images before exit")
-    # parser.add_argument("-N", "--numBins", type=int, default=200, help="Number of integration bins")
-    # parser.add_argument("-o", "--nContrIms", type=int, default=30, help="Calculate average contrast over N images")
-    parser.add_argument("-d", "--camDevice", type=int, default=0, help="Camera device ID")
-    parser.add_argument("-i", "--imAvgs", type=int, default=1, help="Average N images for display and FFT")
-    parser.add_argument("-y", "--vScale", type=float, default=1.2, help="Vertical video scale")
-    parser.add_argument("-x", "--hScale", type=float, default=1.2, help="Horizontal video scale")
-    parser.add_argument("-p", "--downScale", action="store_true", help="Enable pyramidal downscaling")
-    parser.add_argument("-k", "--killCenterLines", action="store_true", help="Remove central lines from FFT image")
-    parser.add_argument("-f", "--figid", type=str, default="liveFFT by Brian R. Pauw - press 'q' to exit.", help="Image window name")
-    parser.add_argument("-r", "--rows", type=int, default=vidCropDefault[1], help="Use center N rows of video")
-    parser.add_argument("-c", "--columns", type=int, default=vidCropDefault[0], help="Use center N columns of video")
-    # parser.add_argument("-P", "--plot", action="store_true", help="Enable a separate 1D plot window")
-
-    return parser.parse_args()
-
 @define
 class LiveFT:
     """Handles live Fourier Transform display of camera feed."""
 
     # Core attributes with default values from command-line arguments
-    numShots: int = field(default=1e5, metadata={"help": "Max number of images before program exits"})
-    # numBins: int = field(default=200, metadata={"help": "Number of integration bins"})
-    # nContrIms: int = field(default=30, metadata={"help": "Average contrast over N images"})
-    camDevice: int = field(default=0, metadata={"help": "Camera device ID"})
-    imAvgs: int = field(default=1, metadata={"help": "Average N images for display and FFT"})
-    vScale: float = field(default=1.0, metadata={"help": "Vertical video scale"})
-    hScale: float = field(default=1.0, metadata={"help": "Horizontal video scale"})
-    downScale: bool = field(default=False, metadata={"help": "Enable pyramidal downscaling"})
-    killCenterLines: bool = field(default=False, metadata={"help": "Remove central lines from FFT image"})
-    figid: str = field(default="liveFFT by Brian R. Pauw - press 'q' to exit.", metadata={"help": "Image window name"})
-    rows: int = field(default=vidCropDefault[1], metadata={"help": "Use center N rows of video"})
-    columns: int = field(default=vidCropDefault[0], metadata={"help": "Use center N columns of video"})
+    # Note: This order affects parse_args() below, all attrs until device become cmdline args
+    numShots: int = field(default=1e5,
+                          metadata={"help": "Max number of images before program exits", "short": "n"})
+    # numBins: int = field(default=200, metadata={"help": "Number of integration bins", "short": "N"})
+    # nContrIms: int = field(default=30, metadata={"help": "Average contrast over N images", "short": "o"})
+    camDevice: int = field(default=0,
+                           metadata={"help": "Camera device ID", "short": "d"})
+    imAvgs: int = field(default=1,
+                        metadata={"help": "Average N images for display and FFT", "short": "a"})
+    vScale: float = field(default=1.2,
+                          metadata={"help": "Vertical video scale", "short": "y"})
+    hScale: float = field(default=1.2,
+                          metadata={"help": "Horizontal video scale", "short": "x"})
+    downScale: bool = field(default=False,
+                            metadata={"help": "Enable pyramidal downscaling", "short": "p"})
+    killCenterLines: bool = field(default=False,
+                                  metadata={"help": "Remove central lines from FFT image", "short": "k"})
+    figid: str = field(default="liveFFT by Brian R. Pauw - press 'q' to exit.",
+                       metadata={"help": "Image window name", "short": "f"})
+    rows: int = field(default=500, metadata={"help": "Use center N rows of video", "short": "r"})
+    columns: int = field(default=500, metadata={"help": "Use center N columns of video", "short": "c"})
 
     # Derived attributes initialized post-instantiation
     device: torch.device = field(init=False, validator=validators.instance_of(torch.device))
@@ -229,6 +216,19 @@ class LiveFT:
         fft_image = (fft_tensor / fft_tensor.max()).cpu().numpy().clip(0, 1)
         return fft_image
 
+# Function to parse arguments for the script
+def parse_args(liveftCls: LiveFT) -> argparse.Namespace:
+    """Parses command-line arguments.
+    Uses the LiveFT class for some options configuration."""
+
+    parser = argparse.ArgumentParser(description="Live Fourier Transform of camera feed.")
+    for attr in liveftCls.__attrs_attrs__:
+        if attr.name == "device":
+            break
+        parser.add_argument("-"+attr.metadata["short"], "--"+attr.name,
+                            type=attr.type, default=attr.default, help=attr.metadata["help"])
+    return parser.parse_args()
+
 if __name__ == "__main__":
-    args = parse_args()
+    args = parse_args(LiveFT)
     live_ft = LiveFT(**vars(args))
