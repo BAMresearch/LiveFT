@@ -53,6 +53,7 @@ class LiveFT:
                        metadata={"help": "Image window name", "short": "f"})
     rows: int = field(default=500, metadata={"help": "Use center N rows of video", "short": "r"})
     columns: int = field(default=500, metadata={"help": "Use center N columns of video", "short": "c"})
+    showInfo: bool = field(default=False, metadata={"help": "Show FPS info text overlay", "short": "i"})
 
     # Derived attributes initialized post-instantiation
     device: torch.device = field(init=False, validator=validators.instance_of(torch.device))
@@ -103,14 +104,45 @@ class LiveFT:
         self.v_crop = (height // 2 - rows // 2, height // 2 + rows // 2)
         self.h_crop = (width // 2 - columns // 2, width // 2 + columns // 2)
 
+    def drawInfoText(self, frame, data) -> None:
+        org = (50, 50)  # Coordinates of the bottom-left corner of the text string
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = .7
+        color = (255, 255, 255)  # White color in BGR
+        thickness = 2
+        cv2.putText(frame, ", ".join([f"{k}: {v}" for k,v in data.items()]),
+                    org, font, font_scale, color, thickness)
+
     def run(self) -> None:
         """Main loop to capture and process frames from the camera."""
         num_frames = 0
+        frames_counted = 0
+        start_time = time.time()
         while num_frames < self.numShots:
             num_frames += 1
-            start_time = time.time()
             frame_final = self.process_frame()
-            if frame_final.size:
+
+            # Capture key press to close window (e.g., 'q' key)
+            key = cv2.waitKey(1)
+            if key & 0xFF == ord('q'):
+                print("Exiting on user request.")
+                break
+            elif key & 0xFF == ord('i'):
+                self.showInfo = not self.showInfo
+
+            # gather some info
+            elapsed = time.time() - start_time
+            fps = (num_frames - frames_counted) / elapsed
+            if elapsed > 2: # duration of FPS measurement window
+                start_time = time.time()
+                frames_counted = num_frames
+            # print(f"Frame {num_frames}, FPS: {fps:.2f}", end="\r")
+
+            # Show info text on request
+            if self.showInfo:
+                self.drawInfoText(frame_final, {"#Frame": num_frames, "fps": f"{fps:.2f}"})
+
+            if frame_final.size: # show the frame if there is any
                 (wx, wy, ww, wh) = cv2.getWindowImageRect(self.figid)
                 (fh, fw) = frame_final.shape
                 if num_frames == 1 and (ww != fw or wh != fh):
@@ -118,18 +150,10 @@ class LiveFT:
                     cv2.resizeWindow(self.figid, fw, fh)
                 cv2.imshow(self.figid, frame_final)
 
-            # Capture key press to close window (e.g., 'q' key)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                print("Exiting on user request.")
-                break
-
             # Check if the window is still open, break if closed
             if not cv2.getWindowProperty(self.figid, cv2.WND_PROP_VISIBLE):
                 print("Window closed by user.")
                 break
-
-            fps = 1 / (time.time() - start_time)
-            print(f"Frame {num_frames}, FPS: {fps:.2f}", end="\r")
 
         self.vc.release()
         cv2.destroyAllWindows()
