@@ -118,6 +118,10 @@ class LiveFT:
         num_frames = 0
         frames_counted = 0
         start_time = time.time()
+        infoData = {"#Frame": 0, "fps": "", "torch": str(self.device)}
+        if infoData["torch"].lower() != "cpu":
+            # get GPU name if enabled
+            infoData["torch"] = torch.cuda.get_device_name(torch.cuda.current_device())
         while num_frames < self.numShots:
             num_frames += 1
             frame_final = self.process_frame()
@@ -140,7 +144,8 @@ class LiveFT:
 
             # Show info text on request
             if self.showInfo:
-                self.drawInfoText(frame_final, {"#Frame": num_frames, "fps": f"{fps:.2f}"})
+                infoData.update({"#Frame": num_frames, "fps": f"{fps:.2f}"})
+                self.drawInfoText(frame_final, infoData)
 
             if frame_final.size: # show the frame if there is any
                 (wx, wy, ww, wh) = cv2.getWindowImageRect(self.figid)
