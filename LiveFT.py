@@ -122,7 +122,14 @@ class LiveFT:
         while num_frames < self.numShots:
             num_frames += 1
             start_time = time.time()
-            self.process_frame()
+            frame_final = self.process_frame()
+            if frame_final.size:
+                (wx, wy, ww, wh) = cv2.getWindowImageRect(self.figid)
+                (fh, fw) = frame_final.shape
+                if num_frames == 1 and (ww != fw or wh != fh):
+                    # resize appropriately only once initially
+                    cv2.resizeWindow(self.figid, fw, fh)
+                cv2.imshow(self.figid, frame_final)
 
             # Capture key press to close window (e.g., 'q' key)
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -161,10 +168,8 @@ class LiveFT:
         fft_image = self._compute_fft(frame_tensor)
         # normalize and convert to numpy array
         frame = (frame_tensor / frame_tensor.max()).cpu().numpy().clip(0, 1)
-
-        cv2.imshow(self.figid, np.concatenate((frame, fft_image), axis=1))
-        return
-        # return self.contrast
+        frames_combined = np.concatenate((frame, fft_image), axis=1)
+        return frames_combined
     
     def _process_image(self, frame: np.ndarray) -> np.ndarray:
         """Crop, scale, and normalize the captured frame."""
