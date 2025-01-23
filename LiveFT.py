@@ -22,7 +22,6 @@ License: Apache-2.0
 from typing import Any, Tuple
 import time
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
 import cv2
 import argparse
@@ -69,9 +68,6 @@ class LiveFT:
     # Derived attributes initialized post-instantiation
     device: torch.device = field(init=False, validator=validators.instance_of(torch.device))
     vc: cv2.VideoCapture = field(init=False, validator=validators.instance_of(cv2.VideoCapture))
-    fig: plt.Figure = field(init=False, validator=validators.instance_of(plt.Figure))
-    ax: plt.Axes = field(init=False)
-    line: plt.Line2D = field(init=False)
     frame_shape: Tuple[int, int, int] = field(init=False)
     v_crop: Tuple[int, int] = field(init=False)
     h_crop: Tuple[int, int] = field(init=False)
@@ -100,7 +96,6 @@ class LiveFT:
 
         # Setup cropping and plotting
         self._setup_cropping()
-        self._initialize_plot()
 
         # Start main loop for capturing and processing frames
         self.run()
@@ -118,15 +113,6 @@ class LiveFT:
 
         self.v_crop = (height // 2 - rows // 2, height // 2 + rows // 2)
         self.h_crop = (width // 2 - columns // 2, width // 2 + columns // 2)
-
-    def _initialize_plot(self) -> None:
-        """Intended to show the azimuthal average of the FFT, but this is hardly used. Not implemented unless someone wants it"""
-        pass
-        # """Initialize the Matplotlib plot for displaying Fourier Transform."""
-        # self.fig, self.ax = plt.subplots(figsize=[8, 4])
-        # self.ax.set_yscale("log")
-        # self.line, = self.ax.plot([], [], ".-")
-        # plt.show(block=False)
 
     def run(self) -> None:
         """Main loop to capture and process frames from the camera."""
