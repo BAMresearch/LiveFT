@@ -1,0 +1,75 @@
+name: Build
+
+# Controls when the action will run.
+on:
+  workflow_call:
+
+jobs:
+  build:
+    # convert this to a matrix if builds differ between platforms
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ['windows-latest']
+        # ['ubuntu-latest', 'macos-latest']
+    steps:
+
+      - name: Checking out the repo
+        uses: actions/checkout@v4
+
+      # see *py_ver* in ci/update.py
+      - name: Setting up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --progress-bar=off -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Build
+        run: pyinstaller LiveFT.spec.win
+
+      # disabled for now
+      # - name: Upload packages for publishing job
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: packages-${{ matrix.os }}
+      #     path: |
+      #         dist/*.whl
+      #         dist/*.tar.gz
+
+  # publish:
+  #   needs: [build]
+  #   runs-on: 'ubuntu-latest'
+  #   steps:
+  #
+  #     - name: Checking out the repo
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Install dependencies
+  #       run: |
+  #         python -m pip install --upgrade pip
+  #         python -m pip install --progress-bar=off -r ci/requirements.txt
+  #
+  #     - name: Download package artifacts
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: packages-*
+  #         merge-multiple: true
+  #         path: dist
+  #
+  #     - name: Check generated packages
+  #       run: twine check dist/*.*
+  #
+  #     - name: Upload packages
+  #       env:
+  #         TWINE_PASSWORD: "${{ secrets.PYPI_TOKEN }}"
+  #         TWINE_NON_INTERACTIVE: 1
+  #       run: |
+  #         twine upload --disable-progress-bar --skip-existing -u __token__ -r pypi dist/*.*
