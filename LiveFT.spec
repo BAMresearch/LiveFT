@@ -21,6 +21,7 @@ splash = Splash(
     datas=a.datas,
     text_pos=(10,50),
     text_size=12,
+    text_color='white',
     minify_script=True,
     always_on_top=True,
 )
