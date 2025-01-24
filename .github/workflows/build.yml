@@ -44,7 +44,8 @@ jobs:
           COMMIT=$(git rev-parse --short HEAD)
           # get the latest commit date in the form of YYYYmmdd
           DATE=$(git log -1 --format=%cd --date=format:'%y%m%d')
-          sed -i -e "s/\(name='\)\(.*\)\(',\)/\1\2-$DATE-$COMMIT-${{ matrix.os }}\3/" LiveFT.spec
+          OS=${{ matrix.os }}
+          sed -i -e "s/\(name='\)\(.*\)\(',\)/\1\2-$DATE-$COMMIT-${OS%-*}\3/" LiveFT.spec
           pyinstaller LiveFT.spec
 
       - name: Store built packages for publishing later
