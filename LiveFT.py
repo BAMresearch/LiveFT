@@ -25,6 +25,7 @@ import numpy as np
 import torch
 import cv2
 import argparse
+import sys
 from attrs import define, field, validators
 
 @define
@@ -74,6 +75,17 @@ class LiveFT:
         self.vc = cv2.VideoCapture(self.camDevice)
         if not self.vc.isOpened():
             raise ValueError("Could not open video device.")
+        # Set desired resolution based on desired colums & rows
+        self.vc.set(cv2.CAP_PROP_FRAME_WIDTH, self.columns)
+        self.vc.set(cv2.CAP_PROP_FRAME_HEIGHT, self.rows)
+        # Set the codec to MJPEG which much faster often
+        fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+        self.vc.set(cv2.CAP_PROP_FOURCC, fourcc)
+        # change the desired fps of the video source
+        # on Linux `v4l2-ctl --list-formats-ext` show possible combinations
+        desired_fps = 240 # typically lower, limited by camera driver support
+        self.vc.set(cv2.CAP_PROP_FPS, desired_fps)
+
         # init torch calculation device for fourier transform
         self.device = torch.device("cuda"
             if self.noGPU and torch.cuda.is_available() else "cpu")
@@ -109,12 +121,20 @@ class LiveFT:
         self.h_crop = (width // 2 - columns // 2, width // 2 + columns // 2)
 
     def drawInfoText(self, frame, data) -> None:
-        org = (50, 50)  # Coordinates of the bottom-left corner of the text string
+        org = [50, 50]  # Coordinates of the bottom-left corner of the text string
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = .7
         color = (255, 255, 255)  # White color in BGR
         thickness = 2
         cv2.putText(frame, ", ".join([f"{k}: {v}" for k,v in data.items()]),
+                    org, font, font_scale, color, thickness)
+        org[1] += int(40*font_scale)
+        # show the current camera resolution
+        actual_width  = int(self.vc.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_height = int(self.vc.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        # show the video data format as well
+        fourcc = int(self.vc.get(cv2.CAP_PROP_FOURCC)).to_bytes(4, byteorder=sys.byteorder).decode()
+        cv2.putText(frame, f"({actual_width}x{actual_height}@{fourcc})",
                     org, font, font_scale, color, thickness)
 
     def run(self) -> None:
