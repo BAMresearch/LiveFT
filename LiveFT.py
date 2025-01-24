@@ -113,6 +113,12 @@ class LiveFT:
         # Setup cropping and plotting
         self._setup_cropping()
 
+        try: # close splash screen, only if standalone/frozen
+            import pyi_splash
+            pyi_splash.close()
+        except ImportError:
+            pass # ignore, works in frozen app onbly
+
         # Start main loop for capturing and processing frames
         self.run()
 
