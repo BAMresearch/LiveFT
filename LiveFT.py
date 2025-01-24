@@ -68,6 +68,7 @@ class LiveFT:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         for kw, value in kwargs.items():
+            # print(f"{kw=} {value=}") # show actual configuration for debugging
             setattr(self, kw, value)
         # Open camera device
         self.vc = cv2.VideoCapture(self.camDevice)
@@ -249,13 +250,18 @@ class LiveFT:
 def parse_args(liveftCls: LiveFT) -> argparse.Namespace:
     """Parses command-line arguments.
     Uses the LiveFT class for some options configuration."""
-
     parser = argparse.ArgumentParser(description="Live Fourier Transform of camera feed.")
     for attr in liveftCls.__attrs_attrs__:
         if attr.name == "device":
             break
-        parser.add_argument("-"+attr.metadata["short"], "--"+attr.name,
-                            type=attr.type, default=attr.default, help=attr.metadata["help"])
+        # print(f"{attr=}") # class config for debugging
+        pkwargs = dict(help=attr.metadata["help"])
+        if attr.type is bool:
+            pkwargs["action"] = "store_true" if not attr.default else "store_false"
+        else:
+            pkwargs.update(type=attr.type, default=attr.default)
+        # print(f"{pkwargs}") # show parser config for debugging
+        parser.add_argument("-"+attr.metadata["short"], "--"+attr.name, **pkwargs)
     return parser.parse_args()
 
 if __name__ == "__main__":
