@@ -260,6 +260,9 @@ class LiveFT:
 
         return frame_tensor
 
+    # TODO: this can be done with opencv completely:
+    # https://www.perplexity.ai/search/with-opencv-videocapture-devic-Qe5GdOHHQ3uT10zg1i3GTQ#7
+    # perhaps, add a test case first with one or two single image files, from PDFs?
     def _compute_fft(self, frame_tensor) -> np.ndarray:
         """Perform FFT on the frame using PyTorch, with optional line removal."""
         # Convert frame to PyTorch tensor on the designated device (GPU/CPU)
