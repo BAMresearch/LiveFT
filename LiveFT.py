@@ -54,6 +54,8 @@ class LiveFT:
     rows: int = field(default=500, metadata={"help": "Use center N rows of video", "short": "r"})
     columns: int = field(default=500, metadata={"help": "Use center N columns of video", "short": "c"})
     showInfo: bool = field(default=False, metadata={"help": "Show FPS info text overlay", "short": "i"})
+    noGPU: bool = field(default=True,
+                        metadata={"help": "Switch between CPU or GPU for Fourier Transform", "short": "g"})
 
     # Derived attributes initialized post-instantiation
     device: torch.device = field(init=False, validator=validators.instance_of(torch.device))
@@ -65,8 +67,6 @@ class LiveFT:
     def __init__(self, **kwargs: Any) -> None:
         """Initialize video capture and plotting after attribute setup."""
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
         for kw, value in kwargs.items():
             # print(f"{kw=} {value=}") # show actual configuration for debugging
             setattr(self, kw, value)
@@ -74,6 +74,9 @@ class LiveFT:
         self.vc = cv2.VideoCapture(self.camDevice)
         if not self.vc.isOpened():
             raise ValueError("Could not open video device.")
+        # init torch calculation device for fourier transform
+        self.device = torch.device("cuda"
+            if self.noGPU and torch.cuda.is_available() else "cpu")
         
         # Initialize display window
         cv2.namedWindow(self.figid, cv2.WINDOW_GUI_NORMAL | cv2.WINDOW_NORMAL)
