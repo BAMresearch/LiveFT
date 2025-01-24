@@ -38,6 +38,7 @@ jobs:
           python -m pip install pyinstaller
 
       - name: Build
+        shell: sh
         run: |
           # get the latest commit hash in the short form
           COMMIT=$(git rev-parse --short HEAD)
