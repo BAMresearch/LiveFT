@@ -124,7 +124,6 @@ class LiveFT:
             infoData["torch"] = torch.cuda.get_device_name(torch.cuda.current_device())
         while num_frames < self.numShots:
             num_frames += 1
-            frame_final = self.process_frame()
 
             # Capture key press to close window (e.g., 'q' key)
             key = cv2.waitKey(1)
@@ -134,6 +133,12 @@ class LiveFT:
             elif key & 0xFF == ord('i'):
                 self.showInfo = not self.showInfo
 
+            # Check if the window is still open, break if closed
+            if not cv2.getWindowProperty(self.figid, cv2.WND_PROP_VISIBLE):
+                print("Window closed by user.")
+                break
+
+            frame_final = self.process_frame()
             # gather some info
             elapsed = time.time() - start_time
             fps = (num_frames - frames_counted) / elapsed
@@ -154,11 +159,6 @@ class LiveFT:
                     # resize appropriately only once initially
                     cv2.resizeWindow(self.figid, fw, fh)
                 cv2.imshow(self.figid, frame_final)
-
-            # Check if the window is still open, break if closed
-            if not cv2.getWindowProperty(self.figid, cv2.WND_PROP_VISIBLE):
-                print("Window closed by user.")
-                break
 
         self.vc.release()
         cv2.destroyAllWindows()
