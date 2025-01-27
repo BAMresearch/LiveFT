@@ -26,7 +26,7 @@ import torch
 import cv2
 import argparse
 import sys
-from attrs import define, field, validators
+from attrs import define, field, fields, validators
 
 # typical video resolutions (from Ingos webcam), extend if needed, must be sorted
 # used to find one which just covers the given columns&rows area
@@ -36,6 +36,16 @@ from attrs import define, field, validators
 typRes = ((160,90), (160,120), (176,144), (320,180), (320,240), (352,288),
           (432,240), (640,360), (640,480), (800,448), (800,600), (864,480),
           (960,720), (1024,576), (1280,720), (1600,896), (1920,1080), (2304,1296), (2304,1536))
+lineSpacing = 40
+
+def drawTextLine(frame:cv2.UMat, line_idx:int, text:str) -> None:
+    posx, posy = 50, 50  # origin image coordinates
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = .7
+    color = (255, 255, 255)  # White color in BGR
+    thickness = 2
+    pos = (posx, posy+int(line_idx*lineSpacing*font_scale))
+    cv2.putText(frame, text, pos, font, font_scale, color, thickness)
 
 @define
 class LiveFT:
@@ -56,10 +66,10 @@ class LiveFT:
     hScale: float = field(default=1.2,
                           metadata={"help": "Horizontal video scale", "short": "x"})
     downScale: bool = field(default=False,
-                            metadata={"help": "Enable pyramidal downscaling", "short": "p"})
+                            metadata={"help": "Enable pyramidal downscaling (not implemented yet)", "short": "p"})
     killCenterLines: bool = field(default=False,
                                   metadata={"help": "Remove central lines from FFT image", "short": "k"})
-    figid: str = field(default="liveFFT by Brian R. Pauw - press 'q' to exit.",
+    figid: str = field(default="liveFFT by Brian R. Pauw - press 'h' for help, 'q' to exit.",
                        metadata={"help": "Image window name", "short": "f"})
     rows: int = field(default=500, metadata={"help": "Use center N rows of video", "short": "r"})
     columns: int = field(default=500, metadata={"help": "Use center N columns of video", "short": "c"})
@@ -74,12 +84,8 @@ class LiveFT:
     v_crop: Tuple[int, int] = field(init=False)
     h_crop: Tuple[int, int] = field(init=False)
 
-    textProps: dict = dict(  # a static configuration, for reuse
-        font=cv2.FONT_HERSHEY_SIMPLEX,
-        font_scale=.7,
-        color=(255, 255, 255),  # White color in BGR
-        thickness = 2
-    )
+    # not an attribute available as cmdline argument
+    showHelp: bool = field(default=False, metadata={"help": "Show interactive help text", "short": "h"})
 
     def __attrs_post_init__(self) -> None:
         """Initialize video capture and plotting after attribute setup."""
@@ -141,17 +147,28 @@ class LiveFT:
         self.h_crop = (width // 2 - columns // 2, width // 2 + columns // 2)
 
     def drawInfoText(self, frame, infoData) -> None:
-        org = [50, 50]  # Coordinates of the bottom-left corner of the text string
-        cv2.putText(frame, ", ".join([f"{k}: {v}" for k,v in infoData.items()]),
-                    org, *self.textProps.values())
-        org[1] += int(40*self.textProps["font_scale"])
+        drawTextLine(frame, 0, ", ".join([f"{k}: {v}" for k,v in infoData.items()]))
         # show the current camera resolution
         actual_width  = int(self.vc.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_height = int(self.vc.get(cv2.CAP_PROP_FRAME_HEIGHT))
         # show the video stream format as well
         fourcc = int(self.vc.get(cv2.CAP_PROP_FOURCC)).to_bytes(4, byteorder=sys.byteorder).decode()
-        cv2.putText(frame, f"({actual_width}x{actual_height}@{fourcc})",
-                    org, *self.textProps.values())
+        drawTextLine(frame, 1, f"({actual_width}x{actual_height}@{fourcc})")
+
+    def drawHelpText(self, frame) -> None:
+        """Draws a static help text into the frame."""
+        lineOffset = 3
+        drawTextLine(frame, lineOffset, "Help | press key:")
+        for index, attr in enumerate([a for a in fields(type(self))
+                            if a.name in ("showHelp", "showInfo", "downScale", "killCenterLines")]):
+            drawTextLine(frame, lineOffset+index+1, attr.metadata["short"]+"-> "+attr.metadata["help"])
+
+    def toggleShortOption(self, key) -> None:
+        for a in fields(type(self)):
+            if a.name not in ("showHelp", "showInfo", "downScale", "killCenterLines"):
+                continue
+            if key & 0xFF == ord(a.metadata["short"]):
+                setattr(self, a.name, not getattr(self, a.name))
 
     def run(self) -> None:
         """Main loop to capture and process frames from the camera."""
@@ -170,8 +187,7 @@ class LiveFT:
             if key & 0xFF == ord('q'):
                 print("Exiting on user request.")
                 break
-            elif key & 0xFF == ord('i'):
-                self.showInfo = not self.showInfo
+            self.toggleShortOption(key)
 
             # Check if the window is still open, break if closed
             if not cv2.getWindowProperty(self.figid, cv2.WND_PROP_VISIBLE):
@@ -191,6 +207,8 @@ class LiveFT:
             if self.showInfo:
                 infoData.update({"#Frame": num_frames, "fps": f"{fps:.2f}"})
                 self.drawInfoText(frame_final, infoData)
+            if self.showHelp:
+                self.drawHelpText(frame_final)
 
             if frame_final.size: # show the frame if there is any
                 (wx, wy, ww, wh) = cv2.getWindowImageRect(self.figid)
