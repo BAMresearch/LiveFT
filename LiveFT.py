@@ -239,7 +239,7 @@ class LiveFT:
         # Prepare and compute FFT on the frame
         frame_tensor = self._process_image(frame)
         # output is numpy array
-        fft_image = self._compute_fft(frame_tensor)
+        fft_image = type(self)._compute_fft(frame_tensor, self.killCenterLines)
         # normalize and convert to numpy array
         frame = (frame_tensor / frame_tensor.max()).cpu().numpy().clip(0, 1)
         frames_combined = np.concatenate((frame, fft_image), axis=1)
@@ -281,14 +281,10 @@ class LiveFT:
     # TODO: this can be done with opencv completely:
     # https://www.perplexity.ai/search/with-opencv-videocapture-devic-Qe5GdOHHQ3uT10zg1i3GTQ#7
     # perhaps, add a test case first with one or two single image files, from PDFs?
-    def _compute_fft(self, frame_tensor) -> np.ndarray:
-        """Perform FFT on the frame using PyTorch, with optional line removal."""
-        # Convert frame to PyTorch tensor on the designated device (GPU/CPU)
-        # frame_tensor = torch.tensor(frame, device=self.device)
-        
-        # Convert to grayscale if color display is disabled
-        # if not self.color:
-        #     frame_tensor = frame_tensor.mean(dim=2)
+    @staticmethod
+    def _compute_fft(frame_tensor, killCenterLines=False) -> np.ndarray:
+        """Perform FFT on the frame using PyTorch, with optional line removal.
+        Its declared static for easier (UI free) testing."""
         
         # Compute the FFT and take the magnitude (squared)
         fft_tensor = torch.fft.fftshift(torch.abs(torch.fft.fft2(frame_tensor)) ** 2)
@@ -297,7 +293,7 @@ class LiveFT:
         fft_tensor = torch.log1p(fft_tensor)
 
         # Optionally remove central lines to enhance dynamic range in display
-        if self.killCenterLines:
+        if killCenterLines:
             h, w = fft_tensor.shape[:2]
             fft_tensor[h // 2 - 1:h // 2 + 1, :] = fft_tensor[h // 2 + 1:h // 2 + 3, :]
             fft_tensor[:, w // 2 - 1:w // 2 + 1] = fft_tensor[:, w // 2 + 1:w // 2 + 3]
