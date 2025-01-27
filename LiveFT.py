@@ -74,6 +74,13 @@ class LiveFT:
     v_crop: Tuple[int, int] = field(init=False)
     h_crop: Tuple[int, int] = field(init=False)
 
+    textProps: dict = dict(  # a static configuration, for reuse
+        font=cv2.FONT_HERSHEY_SIMPLEX,
+        font_scale=.7,
+        color=(255, 255, 255),  # White color in BGR
+        thickness = 2
+    )
+
     def __attrs_post_init__(self) -> None:
         """Initialize video capture and plotting after attribute setup."""
 
@@ -135,20 +142,16 @@ class LiveFT:
 
     def drawInfoText(self, frame, infoData) -> None:
         org = [50, 50]  # Coordinates of the bottom-left corner of the text string
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = .7
-        color = (255, 255, 255)  # White color in BGR
-        thickness = 2
         cv2.putText(frame, ", ".join([f"{k}: {v}" for k,v in infoData.items()]),
-                    org, font, font_scale, color, thickness)
-        org[1] += int(40*font_scale)
+                    org, *self.textProps.values())
+        org[1] += int(40*self.textProps["font_scale"])
         # show the current camera resolution
         actual_width  = int(self.vc.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_height = int(self.vc.get(cv2.CAP_PROP_FRAME_HEIGHT))
         # show the video stream format as well
         fourcc = int(self.vc.get(cv2.CAP_PROP_FOURCC)).to_bytes(4, byteorder=sys.byteorder).decode()
         cv2.putText(frame, f"({actual_width}x{actual_height}@{fourcc})",
-                    org, font, font_scale, color, thickness)
+                    org, *self.textProps.values())
 
     def run(self) -> None:
         """Main loop to capture and process frames from the camera."""
