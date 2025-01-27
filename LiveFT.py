@@ -43,7 +43,7 @@ class LiveFT:
 
     # Core attributes with default values from command-line arguments
     # Note: This order affects parse_args() below, all attrs until device become cmdline args
-    numShots: int = field(default=1e5,
+    numShots: int = field(default=int(1e5),
                           metadata={"help": "Max number of images before program exits", "short": "n"})
     # numBins: int = field(default=200, metadata={"help": "Number of integration bins", "short": "N"})
     # nContrIms: int = field(default=30, metadata={"help": "Average contrast over N images", "short": "o"})
