@@ -136,19 +136,19 @@ class LiveFT:
         self.v_crop = (height // 2 - rows // 2, height // 2 + rows // 2)
         self.h_crop = (width // 2 - columns // 2, width // 2 + columns // 2)
 
-    def drawInfoText(self, frame, data) -> None:
+    def drawInfoText(self, frame, infoData) -> None:
         org = [50, 50]  # Coordinates of the bottom-left corner of the text string
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = .7
         color = (255, 255, 255)  # White color in BGR
         thickness = 2
-        cv2.putText(frame, ", ".join([f"{k}: {v}" for k,v in data.items()]),
+        cv2.putText(frame, ", ".join([f"{k}: {v}" for k,v in infoData.items()]),
                     org, font, font_scale, color, thickness)
         org[1] += int(40*font_scale)
         # show the current camera resolution
         actual_width  = int(self.vc.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_height = int(self.vc.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        # show the video data format as well
+        # show the video stream format as well
         fourcc = int(self.vc.get(cv2.CAP_PROP_FOURCC)).to_bytes(4, byteorder=sys.byteorder).decode()
         cv2.putText(frame, f"({actual_width}x{actual_height}@{fourcc})",
                     org, font, font_scale, color, thickness)
