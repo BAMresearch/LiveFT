@@ -74,12 +74,9 @@ class LiveFT:
     v_crop: Tuple[int, int] = field(init=False)
     h_crop: Tuple[int, int] = field(init=False)
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __attrs_post_init__(self) -> None:
         """Initialize video capture and plotting after attribute setup."""
 
-        for kw, value in kwargs.items():
-            # print(f"{kw=} {value=}") # show actual configuration for debugging
-            setattr(self, kw, value)
         # Open camera device
         self.vc = cv2.VideoCapture(self.camDevice)
         if not self.vc.isOpened():
