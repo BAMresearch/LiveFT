@@ -224,17 +224,19 @@ class LiveFT:
     def process_frame(self) -> np.ndarray:
         """Capture, process, and display a single frame."""
 
-        success, iframe = self.vc.read()
-        if not success:
-            return np.array([])
-        frame = iframe.astype(np.float32) / self.imAvgs
-        nframes = 1
+        frame = None
+        nframes = 0
         while nframes < self.imAvgs:
-            nframes += 1
             success, iframe = self.vc.read()
-            frame += iframe.astype(np.float32) / self.imAvgs
             if not success:
                 return np.array([])
+            if frame is None:
+                frame = iframe.astype(np.float32)
+            else:
+                frame += iframe.astype(np.float32)
+            nframes += 1
+        if self.imAvgs > 1: # average images possibly
+            frame /= self.imAvgs
         
         # Prepare and compute FFT on the frame
         frame_tensor = type(self)._process_image(frame, h_crop=self.h_crop, v_crop=self.v_crop, h_scale=self.hScale, v_scale=self.vScale, device=self.device)
