@@ -237,7 +237,7 @@ class LiveFT:
                 return np.array([])
         
         # Prepare and compute FFT on the frame
-        frame_tensor = self._process_image(frame)
+        frame_tensor = type(self)._process_image(frame, h_crop=self.h_crop, v_crop=self.v_crop, h_scale=self.hScale, v_scale=self.vScale, device=self.device)
         # output is numpy array
         fft_image = type(self)._compute_fft(frame_tensor, self.killCenterLines)
         # normalize and convert to numpy array
@@ -245,23 +245,28 @@ class LiveFT:
         frames_combined = np.concatenate((frame, fft_image), axis=1)
         return frames_combined
     
-    def _process_image(self, frame: np.ndarray) -> np.ndarray:
+    @staticmethod
+    def _process_image(frame: np.ndarray,
+                       h_crop: Tuple, v_crop: Tuple,
+                       h_scale: float, v_scale: float,
+                       device: torch.device) -> torch.Tensor:
         """Crop, scale, and normalize the captured frame."""
         # Crop the frame to the specified center region
-        frame = frame[self.v_crop[0]:self.v_crop[1], self.h_crop[0]:self.h_crop[1]]
+        if h_crop and v_crop:
+            frame = frame[v_crop[0]:v_crop[1], h_crop[0]:h_crop[1]]
         
         # Scale frame dimensions if necessary
-        if self.vScale != 1 or self.hScale != 1:
-            frame = cv2.resize(frame, None, fx=self.hScale, fy=self.vScale)
+        if h_scale != 1 or v_scale != 1:
+            frame = cv2.resize(frame, None, fx=h_scale, fy=v_scale)
  
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         # convert to torch tensor
-        frame_tensor = torch.tensor(frame, device=self.device)
+        frame_tensor = torch.tensor(frame, device=device)
 
         # Apply an error function window
         h, w = frame_tensor.shape
-        y = torch.linspace(-1.0, 1.0, h, device=self.device)
-        x = torch.linspace(-1.0, 1.0, w, device=self.device)
+        y = torch.linspace(-1.0, 1.0, h, device=device)
+        x = torch.linspace(-1.0, 1.0, w, device=device)
         x, y = torch.meshgrid(x, y, indexing='xy')
         
         # Create a window using the error function
@@ -303,7 +308,7 @@ class LiveFT:
         return fft_image
 
 # Function to parse arguments for the script
-def parse_args(liveftCls: LiveFT) -> argparse.Namespace:
+def parse_args(liveftCls: type[LiveFT]) -> argparse.Namespace:
     """Parses command-line arguments.
     Uses the LiveFT class for some options configuration."""
     parser = argparse.ArgumentParser(description="Live Fourier Transform of camera feed.")
