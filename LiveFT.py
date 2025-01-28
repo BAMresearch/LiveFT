@@ -241,8 +241,8 @@ class LiveFT:
         # output is numpy array
         fft_image = type(self)._compute_fft(frame_tensor, self.killCenterLines)
         # normalize and convert to numpy array
-        frame = (frame_tensor / frame_tensor.max()).cpu().numpy().clip(0, 1)
-        frames_combined = np.concatenate((frame, fft_image), axis=1)
+        # print(f"{frame_tensor.numpy().min()=}, {frame_tensor.numpy().max()=}")
+        frames_combined = np.concatenate((frame_tensor, fft_image), axis=1)
         return frames_combined
     
     @staticmethod
@@ -279,7 +279,7 @@ class LiveFT:
         frame_tensor *= window
         
         # expand range:
-        frame_tensor = (frame_tensor - frame_tensor.min()) / (frame_tensor.max() - frame_tensor.min()).cpu()
+        frame_tensor = ((frame_tensor - frame_tensor.min()) / (frame_tensor.max() - frame_tensor.min())).cpu()
 
         return frame_tensor
 
