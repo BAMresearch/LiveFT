@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import sys
 from pathlib import Path
+import pytest
 
 from LiveFT import LiveFT
 
@@ -49,30 +50,52 @@ def showArray(frame, title=""):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-def writeFTImages(showImages=False):
+def examplePDFs():
+    return [fn for sub in subdirs for fn in (Path(inputDir)/Path(sub)).iterdir()
+            if fn.suffix.lower() == ".pdf"]
+
+def writeFTImage(dest_path, src_image):
+    if not dest_path.parent.is_dir():
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(dest_path, src_image)
+    print(f"Wrote '{dest_path}'")
+
+def readFTImage(src_path):
+    assert src_path.is_file()
+    img = cv2.imread(src_path, cv2.IMREAD_GRAYSCALE)
+    return img
+
+def pytest_generate_tests(metafunc):
+    src_paths = examplePDFs()
+    fft_paths = [Path(outputDir) / ((fn.with_suffix(".png")).relative_to(inputDir)) for fn in src_paths]
+    # there argument names relate to the following function definition below
+    if "src_path" in metafunc.fixturenames and "fft_path" in metafunc.fixturenames:
+        metafunc.parametrize(("src_path", "fft_path"), zip(src_paths, fft_paths))
+
+def testFT(src_path, fft_path, showImages=False, writeImages=False):
+    print(f"{src_path=} {fft_path=}")
+    frame_in = pdfToCV(src_path)
+    assert frame_in is not None
+    if showImages:
+        showArray(frame_in, f"Extracted Image {src_path}")
+    frame_prepared = LiveFT._process_image(frame_in.astype(np.float32), h_crop=None, v_crop=None, h_scale=1, v_scale=1, device=None)
+    # output is numpy array
+    fft_image = LiveFT._compute_fft(frame_prepared, False)
+    assert fft_image is not None
+    fft_image = (fft_image * 255).astype(np.uint8)
+    # print(f"{type(fft_image)=}")
+    if showImages:
+        showArray(fft_image, "FFT Image")
+    if writeImages:
+        writeFTImage(fft_path, fft_image)
+        return
+    fft_expected = readFTImage(fft_path)
+    assert fft_expected.dtype == fft_image.dtype
+    assert fft_expected.shape == fft_image.shape
+    assert (fft_expected == fft_image).all()
+
+if __name__ == "__main__":
     # calc the fft for every image in each path given above
-    for pdf_path in [pdf for sub in subdirs for pdf in (Path(inputDir)/Path(sub)).iterdir()]:
-        frame = pdfToCV(pdf_path)
-        if frame is None:
-            continue
-        if showImages:
-            showArray(frame, f"Extracted Image {pdf_path}")
-
-        frame_prepared = LiveFT._process_image(frame.astype(np.float32), h_crop=None, v_crop=None, h_scale=1, v_scale=1, device=None)
-        # output is numpy array
-        fft_image = LiveFT._compute_fft(frame_prepared, False)
-        # print(f"{type(fft_image)=}")
-        if showImages:
-            showArray(fft_image, "FFT Image")
-
-        out_path = Path(outputDir) / ((pdf_path.with_suffix(".png")).relative_to(inputDir))
-        if not out_path.parent.is_dir():
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(out_path, (fft_image * 255).astype(np.uint8))
-        print(f"Wrote '{out_path}'")
-
-def testFT():
-    """Verifies that the current implementation generates the expected Fourier transforms from a set of example images."""
-    pass
-
-#writeFTImages()
+    for src_path in examplePDFs():
+        fft_path = Path(outputDir) / ((src_path.with_suffix(".png")).relative_to(inputDir))
+        testFT(src_path, fft_path, showImages=False, writeImages=False)
