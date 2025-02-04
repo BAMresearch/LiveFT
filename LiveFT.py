@@ -289,15 +289,17 @@ class LiveFT:
     # https://www.perplexity.ai/search/with-opencv-videocapture-devic-Qe5GdOHHQ3uT10zg1i3GTQ#7
     # perhaps, add a test case first with one or two single image files, from PDFs?
     @staticmethod
-    def _compute_fft(frame_tensor, killCenterLines=False) -> np.ndarray:
+    def _compute_fft(frame_in, killCenterLines=False) -> np.ndarray:
         """Perform FFT on the frame using PyTorch, with optional line removal.
         Its declared static for easier (UI free) testing."""
-        
-        # Compute the FFT and take the magnitude (squared)
-        fft_tensor = torch.fft.fftshift(torch.abs(torch.fft.fft2(frame_tensor)) ** 2)
-        
-        # Apply logarithmic scaling for better contrast in visualization
-        fft_tensor = torch.log1p(fft_tensor)
+
+        dft = cv2.dft(frame_in.numpy(), flags=cv2.DFT_COMPLEX_OUTPUT)
+        # Calculate magnitude spectrum (from complex)
+        dft = cv2.magnitude(dft[:,:,0], dft[:,:,1])
+        # Shift the zero-frequency component to the center
+        dft_shifted = np.fft.fftshift(dft)
+        # Use log scale for better visualization
+        fft_tensor = np.log1p(dft_shifted**2)
 
         # Optionally remove central lines to enhance dynamic range in display
         if killCenterLines:
@@ -306,8 +308,12 @@ class LiveFT:
             fft_tensor[:, w // 2 - 1:w // 2 + 1] = fft_tensor[:, w // 2 + 1:w // 2 + 3]
         
         # Normalize and convert back to NumPy array for display
-        fft_image = (fft_tensor / fft_tensor.max()).cpu().numpy().clip(0, 1)
-        return fft_image
+        fft_image = (fft_tensor / fft_tensor.max())
+        try:
+            fft_image.cpu().numpy()
+        except AttributeError:
+            pass
+        return fft_image.clip(0, 1)
 
 # Function to parse arguments for the script
 def parse_args(liveftCls: type[LiveFT]) -> argparse.Namespace:
