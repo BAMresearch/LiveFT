@@ -174,7 +174,7 @@ class LiveFT:
         """Main loop to capture and process frames from the camera."""
         num_frames = 0
         frames_counted = 0
-        start_time = time.time()
+        start_time = time.time() # for calculating FPS including capturing
         infoData = {"#Frame": 0, "fps": "", "torch": str(self.device)}
         if infoData["torch"].lower() != "cpu":
             # get GPU name if enabled
@@ -194,7 +194,7 @@ class LiveFT:
                 print("Window closed by user.")
                 break
 
-            frame_final = self.process_frame()
+            frame_final = self.process_frame(infoData)
             # gather some info
             elapsed = time.time() - start_time
             fps = (num_frames - frames_counted) / elapsed
@@ -221,7 +221,7 @@ class LiveFT:
         self.vc.release()
         cv2.destroyAllWindows()
 
-    def process_frame(self) -> np.ndarray:
+    def process_frame(self, infoData: dict) -> np.ndarray:
         """Capture, process, and display a single frame."""
 
         frame = None
@@ -237,7 +237,8 @@ class LiveFT:
             nframes += 1
         if self.imAvgs > 1: # average images possibly
             frame /= self.imAvgs
-        
+
+        start_time = time.time() # calculation time of a single frame, without capturing
         # Prepare and compute FFT on the frame
         frame_tensor = type(self)._process_image(frame, h_crop=self.h_crop, v_crop=self.v_crop, h_scale=self.hScale, v_scale=self.vScale, device=self.device)
         # output is numpy array
@@ -245,6 +246,7 @@ class LiveFT:
         # normalize and convert to numpy array
         # print(f"{frame_tensor.numpy().min()=}, {frame_tensor.numpy().max()=}")
         frames_combined = np.concatenate((frame_tensor, fft_image), axis=1)
+        infoData["frame time"] = f"{(time.time()-start_time)*1e3:.1f} ms"
         return frames_combined
     
     @staticmethod
