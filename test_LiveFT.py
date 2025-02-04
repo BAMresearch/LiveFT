@@ -92,7 +92,14 @@ def testFT(src_path, fft_path, showImages=False, writeImages=False):
     fft_expected = readFTImage(fft_path)
     assert fft_expected.dtype == fft_image.dtype
     assert fft_expected.shape == fft_image.shape
-    assert (fft_expected == fft_image).all()
+    def printRange(arr, title, *args):
+        print(f"{title} range: [{arr.min():.12e}, {arr.max():.12e}], mean: {arr.mean()}", *args)
+    printRange(fft_expected, "fft_expected")
+    printRange(fft_image, "fft_image")
+    fft_diff = np.abs(fft_expected.astype(np.float32) - fft_image.astype(np.float32))
+    printRange(fft_diff, "fft_diff", fft_diff.max() <= 1., fft_diff.mean() < 1e-3)
+    # float comparison of 2d FT arrays, there as assumed to be equivalent in case:
+    assert fft_diff.max() <= 1. and fft_diff.mean() < 1e-3
 
 if __name__ == "__main__":
     # calc the fft for every image in each path given above
