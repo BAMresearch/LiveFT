@@ -76,6 +76,8 @@ class LiveFT:
     showInfo: bool = field(default=False, metadata={"help": "Show FPS info text overlay", "short": "i"})
     noGPU: bool = field(default=True,
                         metadata={"help": "Switch between CPU or GPU for Fourier Transform", "short": "g"})
+    frameTimeCount: int = field(default=10,
+                                metadata={"help": "Number of frames to average frame time by", "short": "t"})
 
     # Derived attributes initialized post-instantiation
     device: torch.device = field(init=False, validator=validators.instance_of(torch.device))
@@ -83,6 +85,7 @@ class LiveFT:
     frame_shape: Tuple[int, int, int] = field(init=False)
     v_crop: Tuple[int, int] = field(init=False)
     h_crop: Tuple[int, int] = field(init=False)
+    frameTime: np.ndarray = field(init=False) # array for moving average of frame calc. time
 
     # not an attribute available as cmdline argument
     showHelp: bool = field(default=False, metadata={"help": "Show interactive help text", "short": "h"})
@@ -129,6 +132,7 @@ class LiveFT:
         except ImportError:
             pass # ignore, works in frozen app onbly
 
+        self.frameTime = np.zeros(self.frameTimeCount)
         # Start main loop for capturing and processing frames
         self.run()
 
@@ -194,14 +198,13 @@ class LiveFT:
                 print("Window closed by user.")
                 break
 
-            frame_final = self.process_frame(infoData)
+            frame_final = self.process_frame(num_frames, infoData)
             # gather some info
             elapsed = time.time() - start_time
             fps = (num_frames - frames_counted) / elapsed
             if elapsed > 2: # duration of FPS measurement window
                 start_time = time.time()
                 frames_counted = num_frames
-            # print(f"Frame {num_frames}, FPS: {fps:.2f}", end="\r")
 
             # Show info text on request
             if self.showInfo:
@@ -221,7 +224,7 @@ class LiveFT:
         self.vc.release()
         cv2.destroyAllWindows()
 
-    def process_frame(self, infoData: dict) -> np.ndarray:
+    def process_frame(self, frameIdx:int, infoData: dict) -> np.ndarray:
         """Capture, process, and display a single frame."""
 
         frame = None
@@ -238,7 +241,7 @@ class LiveFT:
         if self.imAvgs > 1: # average images possibly
             frame /= self.imAvgs
 
-        start_time = time.time() # calculation time of a single frame, without capturing
+        frame_time = time.time() # calculation time of a single frame, without capturing
         # Prepare and compute FFT on the frame
         frame_tensor = type(self)._process_image(frame, h_crop=self.h_crop, v_crop=self.v_crop, h_scale=self.hScale, v_scale=self.vScale, device=self.device)
         # output is numpy array
@@ -246,7 +249,8 @@ class LiveFT:
         # normalize and convert to numpy array
         # print(f"{frame_tensor.numpy().min()=}, {frame_tensor.numpy().max()=}")
         frames_combined = np.concatenate((frame_tensor, fft_image), axis=1)
-        infoData["frame time"] = f"{(time.time()-start_time)*1e3:.1f} ms"
+        self.frameTime[frameIdx%self.frameTime.size] = (time.time() - frame_time)
+        infoData["frame time"] = f"{self.frameTime.mean()*1e3:.1f} ms"
         return frames_combined
     
     @staticmethod
