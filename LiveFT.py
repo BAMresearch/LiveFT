@@ -85,6 +85,8 @@ class LiveFT:
     frame_shape: Tuple[int, int, int] = field(init=False)
     v_crop: Tuple[int, int] = field(init=False)
     h_crop: Tuple[int, int] = field(init=False)
+    optionsInteractive: Tuple[str] = field(
+        default=("showHelp", "showInfo", "downScale", "killCenterLines"))
     frameTime: np.ndarray = field(init=False) # array for moving average of frame calc. time
 
     # not an attribute available as cmdline argument
@@ -164,12 +166,12 @@ class LiveFT:
         lineOffset = 3
         drawTextLine(frame, lineOffset, "Help | press key:")
         for index, attr in enumerate([a for a in fields(type(self))
-                            if a.name in ("showHelp", "showInfo", "downScale", "killCenterLines")]):
+                            if a.name in self.optionsInteractive]):
             drawTextLine(frame, lineOffset+index+1, attr.metadata["short"]+"-> "+attr.metadata["help"])
 
     def toggleShortOption(self, key) -> None:
         for a in fields(type(self)):
-            if a.name not in ("showHelp", "showInfo", "downScale", "killCenterLines"):
+            if a.name not in self.optionsInteractive:
                 continue
             if key & 0xFF == ord(a.metadata["short"]):
                 setattr(self, a.name, not getattr(self, a.name))
