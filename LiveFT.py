@@ -295,28 +295,18 @@ class LiveFT:
         x = torch.linspace(-1.0, 1.0, w, device=device)
         x2 = np.linspace(-1.0, 1.0, w)
         y2 = np.linspace(-1.0, 1.0, h)
-        print(f"1 {x.shape=} {y.shape=}")
-        print(f"1 {x2.shape=} {y2.shape=}")
         x, y = torch.meshgrid(x, y, indexing='xy')
         x2, y2 = np.meshgrid(x2, y2)
-        print(f"2 {x.shape=} {y.shape=}")
-        print(f"2 {x2.shape=} {y2.shape=}")
-        print(np.ptp(x-x2))
-        print(np.ptp(y-y2))
         
         # Create a window using the error function
         # largest difference to torch result is <1e-7, torch has lower precision probably
         taper_width = 0.2  # Adjust the taper width as necessary
         window_x = torch.erf((x + 1) / taper_width) * torch.erf((1 - x) / taper_width)
         window_y = torch.erf((y + 1) / taper_width) * torch.erf((1 - y) / taper_width)
-        print(f"3 {window_x.shape=} {window_y.shape=}")
         window_x2 = erf_vectorized((x + 1) / taper_width) * erf_vectorized((1 - x) / taper_width)
         window_y2 = erf_vectorized((y + 1) / taper_width) * erf_vectorized((1 - y) / taper_width)
-        print("testx:", np.ptp(window_x.numpy()-window_x2))
-        print("testy:", np.ptp(window_y.numpy()-window_y2))
         window = window_x * window_y
         window2 = LiveFT._frame_window(w, h, taper_width)
-        print(f"4 window diff", np.ptp(window-window2), window.min(), window.max())
         
         # Apply the window to the frame
         frame_tensor *= window
@@ -325,10 +315,6 @@ class LiveFT:
         frame_tensor = ((frame_tensor - frame_tensor.min()) / (frame_tensor.max() - frame_tensor.min())).cpu()
         frame *= window2
         frame = ((frame - frame.min()) / (frame.max() - frame.min()))
-        print(f"4 frame diff", np.ptp(frame_tensor-frame), frame.min(), frame.max())
-        # last output
-        # 4 window diff tensor(3.6178e-07, dtype=torch.float64) tensor(0.) tensor(1.)
-        # 4 frame diff tensor(3.5763e-07) 0.0 1.0
 
         return frame
 
