@@ -255,7 +255,9 @@ class LiveFT:
         fft_image = type(self).computeFFT(frame, self.killCenterLines)
         # normalize and convert to numpy array
         frames_combined = np.concatenate((frame, fft_image), axis=1)
+        # record how long this frame took to process
         self.frameTime[frameIdx%self.frameTime.size] = (time.time() - frame_time)
+        # show the frame time average for info overlay
         infoData["frame time"] = f"{self.frameTime.mean()*1e3:.1f} ms"
         return frames_combined
 
