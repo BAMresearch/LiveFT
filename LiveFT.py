@@ -4,7 +4,7 @@
 """
 Overview
 ========
-This program captures images from the camera, applies a Fourier transform using PyTorch,
+This program captures images from the camera, applies a Fourier transform,
 and displays the transformed image alongside the original on the screen.
 
 To run:
@@ -22,7 +22,6 @@ License: Apache-2.0
 from typing import Any, Tuple
 import time
 import numpy as np
-import torch
 import cv2
 import argparse
 import sys
@@ -84,7 +83,6 @@ class LiveFT:
                                 metadata={"help": "Number of frames to average frame time by", "short": "t"})
 
     # Derived attributes initialized post-instantiation
-    device: torch.device = field(init=False, validator=validators.instance_of(torch.device))
     vc: cv2.VideoCapture = field(init=False, validator=validators.instance_of(cv2.VideoCapture))
     frame_shape: Tuple[int, int, int] = field(init=False)
     v_crop: Tuple[int, int] = field(init=False)
@@ -114,10 +112,6 @@ class LiveFT:
         # change the desired fps of the video source
         desired_fps = 240 # typically lower, limited by camera driver support
         self.vc.set(cv2.CAP_PROP_FPS, desired_fps)
-
-        # init torch calculation device for fourier transform
-        self.device = torch.device("cuda"
-            if self.noGPU and torch.cuda.is_available() else "cpu")
         
         # Initialize display window
         cv2.namedWindow(self.figid, cv2.WINDOW_GUI_NORMAL | cv2.WINDOW_NORMAL)
@@ -185,10 +179,7 @@ class LiveFT:
         num_frames = 0
         frames_counted = 0
         start_time = time.time() # for calculating FPS including capturing
-        infoData = {"#Frame": 0, "fps": "", "torch": str(self.device)}
-        if infoData["torch"].lower() != "cpu":
-            # get GPU name if enabled
-            infoData["torch"] = torch.cuda.get_device_name(torch.cuda.current_device())
+        infoData = {"#Frame": 0, "fps": "", "hw": "cpu"}
         while num_frames < self.numShots:
             num_frames += 1
 
@@ -232,7 +223,6 @@ class LiveFT:
 
     def process_frame(self, frameIdx:int, infoData: dict) -> np.ndarray:
         """Capture, process, and display a single frame."""
-
         frame = None
         nframes = 0
         while nframes < self.imAvgs:
@@ -249,12 +239,11 @@ class LiveFT:
 
         frame_time = time.time() # calculation time of a single frame, without capturing
         # Prepare and compute FFT on the frame
-        frame_tensor = type(self)._process_image(frame, h_crop=self.h_crop, v_crop=self.v_crop, h_scale=self.hScale, v_scale=self.vScale, device=self.device)
+        frame = type(self)._process_image(frame, h_crop=self.h_crop, v_crop=self.v_crop, h_scale=self.hScale, v_scale=self.vScale)
         # output is numpy array
-        fft_image = type(self)._compute_fft(frame_tensor, self.killCenterLines)
+        fft_image = type(self)._compute_fft(frame, self.killCenterLines)
         # normalize and convert to numpy array
-        # print(f"{frame_tensor.numpy().min()=}, {frame_tensor.numpy().max()=}")
-        frames_combined = np.concatenate((frame_tensor, fft_image), axis=1)
+        frames_combined = np.concatenate((frame, fft_image), axis=1)
         self.frameTime[frameIdx%self.frameTime.size] = (time.time() - frame_time)
         infoData["frame time"] = f"{self.frameTime.mean()*1e3:.1f} ms"
         return frames_combined
@@ -274,46 +263,26 @@ class LiveFT:
     @staticmethod
     def _process_image(frame: np.ndarray,
                        h_crop: Tuple, v_crop: Tuple,
-                       h_scale: float, v_scale: float,
-                       device: torch.device) -> torch.Tensor:
+                       h_scale: float, v_scale: float) -> np.ndarray:
         """Crop, scale, and normalize the captured frame."""
         # Crop the frame to the specified center region
         if h_crop and v_crop:
             frame = frame[v_crop[0]:v_crop[1], h_crop[0]:h_crop[1]]
-        
+
         # Scale frame dimensions if necessary
         if h_scale != 1 or v_scale != 1:
             frame = cv2.resize(frame, None, fx=h_scale, fy=v_scale)
- 
+        # make sure it's grayscale
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        # convert to torch tensor
-        frame_tensor = torch.tensor(frame, device=device)
 
         # Apply an error function window, create a grid first
-        h, w = frame_tensor.shape
-        y = torch.linspace(-1.0, 1.0, h, device=device)
-        x = torch.linspace(-1.0, 1.0, w, device=device)
-        x2 = np.linspace(-1.0, 1.0, w)
-        y2 = np.linspace(-1.0, 1.0, h)
-        x, y = torch.meshgrid(x, y, indexing='xy')
-        x2, y2 = np.meshgrid(x2, y2)
-        
+        h, w = frame.shape
         # Create a window using the error function
         # largest difference to torch result is <1e-7, torch has lower precision probably
-        taper_width = 0.2  # Adjust the taper width as necessary
-        window_x = torch.erf((x + 1) / taper_width) * torch.erf((1 - x) / taper_width)
-        window_y = torch.erf((y + 1) / taper_width) * torch.erf((1 - y) / taper_width)
-        window_x2 = erf_vectorized((x + 1) / taper_width) * erf_vectorized((1 - x) / taper_width)
-        window_y2 = erf_vectorized((y + 1) / taper_width) * erf_vectorized((1 - y) / taper_width)
-        window = window_x * window_y
-        window2 = LiveFT._frame_window(w, h, taper_width)
-        
+        window2 = LiveFT._frame_window(w, h, taper_width = 0.2)
         # Apply the window to the frame
-        frame_tensor *= window
-        
-        # expand range:
-        frame_tensor = ((frame_tensor - frame_tensor.min()) / (frame_tensor.max() - frame_tensor.min())).cpu()
         frame *= window2
+        # expand range
         frame = ((frame - frame.min()) / (frame.max() - frame.min()))
 
         return frame
@@ -332,20 +301,16 @@ class LiveFT:
         # Shift the zero-frequency component to the center
         dft_shifted = np.fft.fftshift(dft)
         # Use log scale for better visualization
-        fft_tensor = np.log1p(dft_shifted**2)
+        fft_log = np.log1p(dft_shifted**2)
 
         # Optionally remove central lines to enhance dynamic range in display
         if killCenterLines:
-            h, w = fft_tensor.shape[:2]
-            fft_tensor[h // 2 - 1:h // 2 + 1, :] = fft_tensor[h // 2 + 1:h // 2 + 3, :]
-            fft_tensor[:, w // 2 - 1:w // 2 + 1] = fft_tensor[:, w // 2 + 1:w // 2 + 3]
+            h, w = fft_log.shape[:2]
+            fft_log[h // 2 - 1:h // 2 + 1, :] = fft_log[h // 2 + 1:h // 2 + 3, :]
+            fft_log[:, w // 2 - 1:w // 2 + 1] = fft_log[:, w // 2 + 1:w // 2 + 3]
         
         # Normalize and convert back to NumPy array for display
-        fft_image = (fft_tensor / fft_tensor.max())
-        try:
-            fft_image.cpu().numpy()
-        except AttributeError:
-            pass
+        fft_image = (fft_log / fft_log.max())
         return fft_image.clip(0, 1)
 
 # Function to parse arguments for the script
@@ -354,7 +319,7 @@ def parse_args(liveftCls: type[LiveFT]) -> argparse.Namespace:
     Uses the LiveFT class for some options configuration."""
     parser = argparse.ArgumentParser(description="Live Fourier Transform of camera feed.")
     for attr in liveftCls.__attrs_attrs__:
-        if attr.name == "device":
+        if attr.name == "vc":
             break
         # print(f"{attr=}") # class config for debugging
         pkwargs = dict(help=attr.metadata["help"])
