@@ -27,6 +27,10 @@ import cv2
 import argparse
 import sys
 from attrs import define, field, fields, validators
+import math
+
+# Vectorize the math.erf function
+erf_vectorized = np.vectorize(math.erf)
 
 # typical video resolutions (from Ingos webcam), extend if needed, must be sorted
 # used to find one which just covers the given columns&rows area
@@ -254,7 +258,19 @@ class LiveFT:
         self.frameTime[frameIdx%self.frameTime.size] = (time.time() - frame_time)
         infoData["frame time"] = f"{self.frameTime.mean()*1e3:.1f} ms"
         return frames_combined
-    
+
+    @staticmethod
+    def _frame_window(w:int, h:int, taper_width:float = 0.2):
+        # create a grid for an error function window
+        x2 = np.linspace(-1.0, 1.0, w)
+        y2 = np.linspace(-1.0, 1.0, h)
+        x2, y2 = np.meshgrid(x2, y2)
+        # Create a window using the error function
+        # largest difference to torch result is <1e-7, torch has lower precision probably
+        window_x2 = erf_vectorized((x2 + 1) / taper_width) * erf_vectorized((1 - x2) / taper_width)
+        window_y2 = erf_vectorized((y2 + 1) / taper_width) * erf_vectorized((1 - y2) / taper_width)
+        return window_x2 * window_y2
+
     @staticmethod
     def _process_image(frame: np.ndarray,
                        h_crop: Tuple, v_crop: Tuple,
@@ -273,35 +289,58 @@ class LiveFT:
         # convert to torch tensor
         frame_tensor = torch.tensor(frame, device=device)
 
-        # Apply an error function window
+        # Apply an error function window, create a grid first
         h, w = frame_tensor.shape
         y = torch.linspace(-1.0, 1.0, h, device=device)
         x = torch.linspace(-1.0, 1.0, w, device=device)
+        x2 = np.linspace(-1.0, 1.0, w)
+        y2 = np.linspace(-1.0, 1.0, h)
+        print(f"1 {x.shape=} {y.shape=}")
+        print(f"1 {x2.shape=} {y2.shape=}")
         x, y = torch.meshgrid(x, y, indexing='xy')
+        x2, y2 = np.meshgrid(x2, y2)
+        print(f"2 {x.shape=} {y.shape=}")
+        print(f"2 {x2.shape=} {y2.shape=}")
+        print(np.ptp(x-x2))
+        print(np.ptp(y-y2))
         
         # Create a window using the error function
+        # largest difference to torch result is <1e-7, torch has lower precision probably
         taper_width = 0.2  # Adjust the taper width as necessary
         window_x = torch.erf((x + 1) / taper_width) * torch.erf((1 - x) / taper_width)
         window_y = torch.erf((y + 1) / taper_width) * torch.erf((1 - y) / taper_width)
+        print(f"3 {window_x.shape=} {window_y.shape=}")
+        window_x2 = erf_vectorized((x + 1) / taper_width) * erf_vectorized((1 - x) / taper_width)
+        window_y2 = erf_vectorized((y + 1) / taper_width) * erf_vectorized((1 - y) / taper_width)
+        print("testx:", np.ptp(window_x.numpy()-window_x2))
+        print("testy:", np.ptp(window_y.numpy()-window_y2))
         window = window_x * window_y
+        window2 = LiveFT._frame_window(w, h, taper_width)
+        print(f"4 window diff", np.ptp(window-window2), window.min(), window.max())
         
         # Apply the window to the frame
         frame_tensor *= window
         
         # expand range:
         frame_tensor = ((frame_tensor - frame_tensor.min()) / (frame_tensor.max() - frame_tensor.min())).cpu()
+        frame *= window2
+        frame = ((frame - frame.min()) / (frame.max() - frame.min()))
+        print(f"4 frame diff", np.ptp(frame_tensor-frame), frame.min(), frame.max())
+        # last output
+        # 4 window diff tensor(3.6178e-07, dtype=torch.float64) tensor(0.) tensor(1.)
+        # 4 frame diff tensor(3.5763e-07) 0.0 1.0
 
-        return frame_tensor
+        return frame
 
     # TODO: this can be done with opencv completely:
     # https://www.perplexity.ai/search/with-opencv-videocapture-devic-Qe5GdOHHQ3uT10zg1i3GTQ#7
     # perhaps, add a test case first with one or two single image files, from PDFs?
     @staticmethod
     def _compute_fft(frame_in, killCenterLines=False) -> np.ndarray:
-        """Perform FFT on the frame using PyTorch, with optional line removal.
+        """Perform FFT on the frame, with optional line removal.
         Its declared static for easier (UI free) testing."""
 
-        dft = cv2.dft(frame_in.numpy(), flags=cv2.DFT_COMPLEX_OUTPUT)
+        dft = cv2.dft(frame_in, flags=cv2.DFT_COMPLEX_OUTPUT)
         # Calculate magnitude spectrum (from complex)
         dft = cv2.magnitude(dft[:,:,0], dft[:,:,1])
         # Shift the zero-frequency component to the center
