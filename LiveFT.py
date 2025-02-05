@@ -90,6 +90,7 @@ class LiveFT:
     optionsInteractive: Tuple[str] = field(
         default=("showHelp", "showInfo", "downScale", "killCenterLines"))
     frameTime: np.ndarray = field(init=False) # array for moving average of frame calc. time
+    frameErf: np.ndarray = field(init=False) # error function window for input video frame
 
     # not an attribute available as cmdline argument
     showHelp: bool = field(default=False, metadata={"help": "Show interactive help text", "short": "h"})
@@ -133,6 +134,7 @@ class LiveFT:
             pass # ignore, works in frozen app onbly
 
         self.frameTime = np.zeros(self.frameTimeCount)
+        self.frameErf = None
         # Start main loop for capturing and processing frames
         self.run()
 
@@ -195,7 +197,7 @@ class LiveFT:
                 print("Window closed by user.")
                 break
 
-            frame_final = self.process_frame(num_frames, infoData)
+            frame_final = self.nextFrame(num_frames, infoData)
             # gather some info
             elapsed = time.time() - start_time
             fps = (num_frames - frames_counted) / elapsed
@@ -221,7 +223,7 @@ class LiveFT:
         self.vc.release()
         cv2.destroyAllWindows()
 
-    def process_frame(self, frameIdx:int, infoData: dict) -> np.ndarray:
+    def nextFrame(self, frameIdx:int, infoData: dict) -> np.ndarray:
         """Capture, process, and display a single frame."""
         frame = None
         nframes = 0
@@ -239,9 +241,18 @@ class LiveFT:
 
         frame_time = time.time() # calculation time of a single frame, without capturing
         # Prepare and compute FFT on the frame
-        frame = type(self)._process_image(frame, h_crop=self.h_crop, v_crop=self.v_crop, h_scale=self.hScale, v_scale=self.vScale)
+        frame = type(self).prepareFrame(frame, h_crop=self.h_crop, v_crop=self.v_crop, h_scale=self.hScale, v_scale=self.vScale)
+        # Create a window using the error function
+        # largest difference to torch result is <1e-7, torch has lower precision probably
+        if self.frameErf is None:
+            h, w = frame.shape
+            self.frameErf = LiveFT.makeFrameWindow(w, h, taper_width = 0.2)
+        # Apply the window to the frame
+        frame *= self.frameErf
+        # expand range
+        frame = ((frame - frame.min()) / (frame.max() - frame.min()))
         # output is numpy array
-        fft_image = type(self)._compute_fft(frame, self.killCenterLines)
+        fft_image = type(self).computeFFT(frame, self.killCenterLines)
         # normalize and convert to numpy array
         frames_combined = np.concatenate((frame, fft_image), axis=1)
         self.frameTime[frameIdx%self.frameTime.size] = (time.time() - frame_time)
@@ -249,7 +260,7 @@ class LiveFT:
         return frames_combined
 
     @staticmethod
-    def _frame_window(w:int, h:int, taper_width:float = 0.2):
+    def makeFrameWindow(w:int, h:int, taper_width:float = 0.2):
         # create a grid for an error function window
         x2 = np.linspace(-1.0, 1.0, w)
         y2 = np.linspace(-1.0, 1.0, h)
@@ -261,7 +272,7 @@ class LiveFT:
         return window_x2 * window_y2
 
     @staticmethod
-    def _process_image(frame: np.ndarray,
+    def prepareFrame(frame: np.ndarray,
                        h_crop: Tuple, v_crop: Tuple,
                        h_scale: float, v_scale: float) -> np.ndarray:
         """Crop, scale, and normalize the captured frame."""
@@ -274,24 +285,11 @@ class LiveFT:
             frame = cv2.resize(frame, None, fx=h_scale, fy=v_scale)
         # make sure it's grayscale
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        # Apply an error function window, create a grid first
-        h, w = frame.shape
-        # Create a window using the error function
-        # largest difference to torch result is <1e-7, torch has lower precision probably
-        window2 = LiveFT._frame_window(w, h, taper_width = 0.2)
-        # Apply the window to the frame
-        frame *= window2
-        # expand range
-        frame = ((frame - frame.min()) / (frame.max() - frame.min()))
-
         return frame
 
-    # TODO: this can be done with opencv completely:
-    # https://www.perplexity.ai/search/with-opencv-videocapture-devic-Qe5GdOHHQ3uT10zg1i3GTQ#7
-    # perhaps, add a test case first with one or two single image files, from PDFs?
+    # static for use in test cases
     @staticmethod
-    def _compute_fft(frame_in, killCenterLines=False) -> np.ndarray:
+    def computeFFT(frame_in, killCenterLines=False) -> np.ndarray:
         """Perform FFT on the frame, with optional line removal.
         Its declared static for easier (UI free) testing."""
 
