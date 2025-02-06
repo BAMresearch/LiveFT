@@ -51,6 +51,85 @@ def drawTextLine(frame:cv2.UMat, line_idx:int, text:str) -> None:
     cv2.putText(frame, text, pos, font, font_scale, color, thickness)
 
 @define
+class FrameProcessor:
+    cropVertLo: int = field(default=0)
+    cropVertUp: int = field(default=-1)
+    cropHorzLo: int = field(default=0)
+    cropHorzUp: int = field(default=-1)
+    scaleVert: float = field(default=1.)
+    scaleHorz: float = field(default=1.)
+    killCenterLines: bool = field(default=False)
+    taperWidth: float = field(default=0.2,
+        validator=validators.and_(validators.ge(0.0), validators.le(1.0)))
+    window: np.ndarray = field(default=None) # error function window for input video frame
+
+    def setWindow(self, w:int, h:int):
+        # create a grid for an error function window
+        x = np.linspace(-1.0, 1.0, w)
+        y = np.linspace(-1.0, 1.0, h)
+        x, y = np.meshgrid(x, y)
+        # Create a window using the error function
+        # largest difference to torch result is <1e-7, torch has lower precision probably
+        window_x = erf_vectorized((x + 1) / self.taperWidth) * erf_vectorized((1 - x) / self.taperWidth)
+        window_y = erf_vectorized((y + 1) / self.taperWidth) * erf_vectorized((1 - y) / self.taperWidth)
+        self.window = window_x * window_y
+
+    def prepareFrame(self, frame: np.ndarray) -> np.ndarray:
+        """Crop, scale, and normalize the captured frame."""
+        # Crop the frame to the specified center region
+        if (0,-1,0,-1) != (self.cropVertLo, self.cropVertUp, self.cropHorzLo, self.cropHorzUp): # FIXME
+            frame = frame[self.cropVertLo:self.cropVertUp, self.cropHorzLo:self.cropHorzUp]
+
+        # Scale frame dimensions if necessary
+        if self.scaleHorz != 1. or self.scaleVert != 1.:
+            frame = cv2.resize(frame, None, fx=self.scaleHorz, fy=self.scaleVert)
+        # make sure it's grayscale
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        return frame
+
+    def applyWindow(self, frame: np.ndarray) -> np.ndarray:
+        # Create a window using the error function
+        # largest difference to torch result is <1e-7, torch has lower precision probably
+        if self.window is None:
+            h, w = frame.shape
+            self.setWindow(w, h)
+        # Apply the window to the frame
+        frame *= self.window
+        # expand range
+        return ((frame - frame.min()) / (frame.max() - frame.min()))
+
+    # static for use in test cases
+    def computeFFT(self, frame: np.ndarray) -> np.ndarray:
+        """Perform FFT on the frame, with optional line removal.
+        Its declared static for easier (UI free) testing."""
+
+        dft = cv2.dft(frame, flags=cv2.DFT_COMPLEX_OUTPUT)
+        # Calculate magnitude spectrum (from complex)
+        dft = cv2.magnitude(dft[:,:,0], dft[:,:,1])
+        # Shift the zero-frequency component to the center
+        dft_shifted = np.fft.fftshift(dft)
+        # Use log scale for better visualization
+        fft_log = np.log1p(dft_shifted**2)
+
+        # Optionally remove central lines to enhance dynamic range in display
+        if self.killCenterLines:
+            h, w = fft_log.shape[:2]
+            fft_log[h // 2 - 1:h // 2 + 1, :] = fft_log[h // 2 + 1:h // 2 + 3, :]
+            fft_log[:, w // 2 - 1:w // 2 + 1] = fft_log[:, w // 2 + 1:w // 2 + 3]
+
+        # Normalize and convert back to NumPy array for display
+        fft_image = (fft_log / fft_log.max())
+        return fft_image.clip(0, 1)
+
+    def __call__(self, frame) -> Tuple[np.ndarray]:
+        """Process a single image with preparations resulting in the fourier transformed image.
+        No assumptions should be made of the source, can be from camera or from disk."""
+        frame = self.prepareFrame(frame)
+        frame = self.applyWindow(frame)
+        fft = self.computeFFT(frame)
+        return frame, fft
+
+@define
 class LiveFT:
     """Handles live Fourier Transform display of camera feed."""
 
@@ -84,13 +163,10 @@ class LiveFT:
 
     # Derived attributes initialized post-instantiation
     vc: cv2.VideoCapture = field(init=False, validator=validators.instance_of(cv2.VideoCapture))
-    frame_shape: Tuple[int, int, int] = field(init=False)
-    v_crop: Tuple[int, int] = field(init=False)
-    h_crop: Tuple[int, int] = field(init=False)
     optionsInteractive: Tuple[str] = field(
         default=("showHelp", "showInfo", "downScale", "killCenterLines"))
     frameTime: np.ndarray = field(init=False) # array for moving average of frame calc. time
-    frameErf: np.ndarray = field(init=False) # error function window for input video frame
+    frameProc: FrameProcessor = field(factory=FrameProcessor)
 
     # not an attribute available as cmdline argument
     showHelp: bool = field(default=False, metadata={"help": "Show interactive help text", "short": "h"})
@@ -118,15 +194,6 @@ class LiveFT:
         cv2.namedWindow(self.figid, cv2.WINDOW_GUI_NORMAL | cv2.WINDOW_NORMAL)
         cv2.resizeWindow(self.figid, 1024, 768)
 
-        # Capture first frame to determine frame shape
-        success, frame = self.vc.read()
-        if not success:
-            raise ValueError("Failed to capture initial frame.")
-        self.frame_shape = frame.shape  # Frame shape for cropping setup
-
-        # Setup cropping and plotting
-        self._setup_cropping()
-
         try: # close splash screen, only if standalone/frozen
             import pyi_splash
             pyi_splash.close()
@@ -134,23 +201,8 @@ class LiveFT:
             pass # ignore, works in frozen app onbly
 
         self.frameTime = np.zeros(self.frameTimeCount)
-        self.frameErf = None
         # Start main loop for capturing and processing frames
         self.run()
-
-    def _setup_cropping(self) -> None:
-        """Configure cropping boundaries for the center region of the frame."""
-        rows, columns = self.rows, self.columns
-        height, width = self.frame_shape[:2]
-
-        # Ensure crop dimensions are within frame limits
-        if rows > height:
-            rows = height
-        if columns > width:
-            columns = width
-
-        self.v_crop = (height // 2 - rows // 2, height // 2 + rows // 2)
-        self.h_crop = (width // 2 - columns // 2, width // 2 + columns // 2)
 
     def drawInfoText(self, frame, infoData) -> None:
         drawTextLine(frame, 0, ", ".join([f"{k}: {v}" for k,v in infoData.items()]))
@@ -197,7 +249,7 @@ class LiveFT:
                 print("Window closed by user.")
                 break
 
-            frame_final = self.nextFrame(num_frames, infoData)
+            frame_final = self.composeFrame(num_frames, infoData)
             # gather some info
             elapsed = time.time() - start_time
             fps = (num_frames - frames_counted) / elapsed
@@ -223,14 +275,15 @@ class LiveFT:
         self.vc.release()
         cv2.destroyAllWindows()
 
-    def nextFrame(self, frameIdx:int, infoData: dict) -> np.ndarray:
+    def captureFrame(self) -> np.ndarray:
         """Capture, process, and display a single frame."""
         frame = None
         nframes = 0
         while nframes < self.imAvgs:
             success, iframe = self.vc.read()
             if not success:
-                return np.array([])
+                raise ValueError("Failed to capture frame.")
+                #return np.array([])
             if frame is None:
                 frame = iframe.astype(np.float32)
             else:
@@ -238,80 +291,38 @@ class LiveFT:
             nframes += 1
         if self.imAvgs > 1: # average images possibly
             frame /= self.imAvgs
+        return frame
 
+    def composeFrame(self, frameIdx:int, infoData: dict) -> np.ndarray:
+        frame = self.captureFrame()
         frame_time = time.time() # calculation time of a single frame, without capturing
-        # Prepare and compute FFT on the frame
-        frame = type(self).prepareFrame(frame, h_crop=self.h_crop, v_crop=self.v_crop, h_scale=self.hScale, v_scale=self.vScale)
-        # Create a window using the error function
-        # largest difference to torch result is <1e-7, torch has lower precision probably
-        if self.frameErf is None:
-            h, w = frame.shape
-            self.frameErf = LiveFT.makeFrameWindow(w, h, taper_width = 0.2)
-        # Apply the window to the frame
-        frame *= self.frameErf
-        # expand range
-        frame = ((frame - frame.min()) / (frame.max() - frame.min()))
-        # output is numpy array
-        fft_image = type(self).computeFFT(frame, self.killCenterLines)
+
+        # Ensure crop dimensions are within frame limits
+        height, width = frame.shape[:2]
+        if self.rows > height:
+            self.rows = height
+        if self.columns > width:
+            self.columns = width
+        # Configure cropping boundaries for the center region of the frame.
+        self.frameProc.cropVertLo = height // 2 - self.rows // 2
+        self.frameProc.cropVertUp = height // 2 + self.rows // 2
+        self.frameProc.cropHorzLo = width // 2 - self.columns // 2
+        self.frameProc.cropHorzUp = width // 2 + self.columns // 2
+        # forward the desired scaling
+        self.frameProc.scaleHorz = self.hScale
+        self.frameProc.scaleVert = self.vScale
+        # forward options for the fourier transformed result
+        self.frameProc.killCenterLines = self.killCenterLines
+        frame, fft = self.frameProc(frame)
+
         # normalize and convert to numpy array
-        frames_combined = np.concatenate((frame, fft_image), axis=1)
+        framesCombined = np.concatenate((frame, fft), axis=1)
+
         # record how long this frame took to process
         self.frameTime[frameIdx%self.frameTime.size] = (time.time() - frame_time)
         # show the frame time average for info overlay
         infoData["frame time"] = f"{self.frameTime.mean()*1e3:.1f} ms"
-        return frames_combined
-
-    @staticmethod
-    def makeFrameWindow(w:int, h:int, taper_width:float = 0.2):
-        # create a grid for an error function window
-        x2 = np.linspace(-1.0, 1.0, w)
-        y2 = np.linspace(-1.0, 1.0, h)
-        x2, y2 = np.meshgrid(x2, y2)
-        # Create a window using the error function
-        # largest difference to torch result is <1e-7, torch has lower precision probably
-        window_x2 = erf_vectorized((x2 + 1) / taper_width) * erf_vectorized((1 - x2) / taper_width)
-        window_y2 = erf_vectorized((y2 + 1) / taper_width) * erf_vectorized((1 - y2) / taper_width)
-        return window_x2 * window_y2
-
-    @staticmethod
-    def prepareFrame(frame: np.ndarray,
-                       h_crop: Tuple, v_crop: Tuple,
-                       h_scale: float, v_scale: float) -> np.ndarray:
-        """Crop, scale, and normalize the captured frame."""
-        # Crop the frame to the specified center region
-        if h_crop and v_crop:
-            frame = frame[v_crop[0]:v_crop[1], h_crop[0]:h_crop[1]]
-
-        # Scale frame dimensions if necessary
-        if h_scale != 1 or v_scale != 1:
-            frame = cv2.resize(frame, None, fx=h_scale, fy=v_scale)
-        # make sure it's grayscale
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        return frame
-
-    # static for use in test cases
-    @staticmethod
-    def computeFFT(frame_in, killCenterLines=False) -> np.ndarray:
-        """Perform FFT on the frame, with optional line removal.
-        Its declared static for easier (UI free) testing."""
-
-        dft = cv2.dft(frame_in, flags=cv2.DFT_COMPLEX_OUTPUT)
-        # Calculate magnitude spectrum (from complex)
-        dft = cv2.magnitude(dft[:,:,0], dft[:,:,1])
-        # Shift the zero-frequency component to the center
-        dft_shifted = np.fft.fftshift(dft)
-        # Use log scale for better visualization
-        fft_log = np.log1p(dft_shifted**2)
-
-        # Optionally remove central lines to enhance dynamic range in display
-        if killCenterLines:
-            h, w = fft_log.shape[:2]
-            fft_log[h // 2 - 1:h // 2 + 1, :] = fft_log[h // 2 + 1:h // 2 + 3, :]
-            fft_log[:, w // 2 - 1:w // 2 + 1] = fft_log[:, w // 2 + 1:w // 2 + 3]
-        
-        # Normalize and convert back to NumPy array for display
-        fft_image = (fft_log / fft_log.max())
-        return fft_image.clip(0, 1)
+        return framesCombined
 
 # Function to parse arguments for the script
 def parse_args(liveftCls: type[LiveFT]) -> argparse.Namespace:

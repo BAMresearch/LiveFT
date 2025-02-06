@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 import pytest
 
-from LiveFT import LiveFT
+from LiveFT import LiveFT, FrameProcessor
 
 inputDir  = "images"
 outputDir = "testdata"
@@ -78,9 +78,11 @@ def testFT(src_path, fft_path, showImages=False, writeImages=False):
     assert frame_in is not None
     if showImages:
         showArray(frame_in, f"Extracted Image {src_path}")
-    frame_prepared = LiveFT._process_image(frame_in.astype(np.float32), h_crop=None, v_crop=None, h_scale=1, v_scale=1, device=None)
+    #frame_prepared = LiveFT._process_image(frame_in.astype(np.float32), h_crop=None, v_crop=None, h_scale=1, v_scale=1, device=None)
+    fp = FrameProcessor()
+    frame_prepared, fft_image = fp(frame_in.astype(np.float32))
     # output is numpy array
-    fft_image = LiveFT._compute_fft(frame_prepared, False)
+    #fft_image = LiveFT._compute_fft(frame_prepared, False)
     assert fft_image is not None
     fft_image = (fft_image * 255).astype(np.uint8)
     # print(f"{type(fft_image)=}")
