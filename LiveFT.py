@@ -92,8 +92,10 @@ class FrameProcessor:
             self.setWindow(w, h)
         # Apply the window to the frame
         frame *= self.window
+        frame -= frame.min()
+        frame /= frame.max()
         # expand range
-        return ((frame - frame.min()) / (frame.max() - frame.min()))
+        return frame
 
     # static for use in test cases
     def computeFFT(self, frame: np.ndarray) -> np.ndarray:
@@ -102,11 +104,11 @@ class FrameProcessor:
 
         dft = cv2.dft(frame, flags=cv2.DFT_COMPLEX_OUTPUT)
         # Calculate magnitude spectrum (from complex)
-        dft = cv2.magnitude(dft[:,:,0], dft[:,:,1])
+        dft = dft[:,:,0]**2 + dft[:,:,1]**2
         # Shift the zero-frequency component to the center
         dft_shifted = np.fft.fftshift(dft)
         # Use log scale for better visualization
-        fft_log = np.log1p(dft_shifted**2)
+        fft_log = np.log1p(dft_shifted)
 
         # Optionally remove central lines to enhance dynamic range in display
         if self.killCenterLines:
@@ -116,7 +118,7 @@ class FrameProcessor:
 
         # Normalize and convert back to NumPy array for display
         fft_image = (fft_log / fft_log.max())
-        return fft_image.clip(0, 1)
+        return fft_image
 
     def __call__(self, frame) -> Tuple[np.ndarray]:
         """Process a single image with preparations resulting in the fourier transformed image.
