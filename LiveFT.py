@@ -13,6 +13,10 @@ For command-line options, use:
     $ python3 liveFT.py --help
 
 press "q" to exit the application
+
+Profile with:
+    python -m cProfile -o LiveFT.prof LiveFT.py -i -c 2000 -r 1000
+    snakeviz LiveFT.prof
     
 Author: Brian R. Pauw with some suggestions from AI
 Contact: brian@stack.nl
