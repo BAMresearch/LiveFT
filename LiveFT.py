@@ -53,9 +53,9 @@ def drawTextLine(frame:cv2.UMat, line_idx:int, text:str) -> None:
 @define
 class FrameProcessor:
     cropVertLo: int = field(default=0)
-    cropVertUp: int = field(default=-1)
+    cropVertUp: int = field(default=None)
     cropHorzLo: int = field(default=0)
-    cropHorzUp: int = field(default=-1)
+    cropHorzUp: int = field(default=None)
     scaleVert: float = field(default=1.)
     scaleHorz: float = field(default=1.)
     killCenterLines: bool = field(default=False)
@@ -77,12 +77,9 @@ class FrameProcessor:
     def prepareFrame(self, frame: np.ndarray) -> np.ndarray:
         """Crop, scale, and normalize the captured frame."""
         # Crop the frame to the specified center region
-        if (0,-1,0,-1) != (self.cropVertLo, self.cropVertUp, self.cropHorzLo, self.cropHorzUp): # FIXME
-            frame = frame[self.cropVertLo:self.cropVertUp, self.cropHorzLo:self.cropHorzUp]
-
+        frame = frame[self.cropVertLo:self.cropVertUp, self.cropHorzLo:self.cropHorzUp]
         # Scale frame dimensions if necessary
-        if self.scaleHorz != 1. or self.scaleVert != 1.:
-            frame = cv2.resize(frame, None, fx=self.scaleHorz, fy=self.scaleVert)
+        frame = cv2.resize(frame, None, fx=self.scaleHorz, fy=self.scaleVert)
         # make sure it's grayscale
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         return frame
