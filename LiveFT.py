@@ -213,8 +213,11 @@ class LiveFT:
         actual_width  = int(self.vc.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_height = int(self.vc.get(cv2.CAP_PROP_FRAME_HEIGHT))
         # show the video stream format as well
-        fourcc = int(self.vc.get(cv2.CAP_PROP_FOURCC)).to_bytes(4, byteorder=sys.byteorder).decode()
-        drawTextLine(frame, 1, f"({actual_width}x{actual_height}@{fourcc})")
+        video_text = f"{actual_width}x{actual_height}"
+        fourcc = int(self.vc.get(cv2.CAP_PROP_FOURCC))
+        if fourcc > 31:
+            video_text += "@" + fourcc.to_bytes(4, byteorder=sys.byteorder).decode()
+        drawTextLine(frame, 1, f"(Input: {video_text})")
 
     def drawHelpText(self, frame) -> None:
         """Draws a static help text into the frame."""
