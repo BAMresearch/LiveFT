@@ -36,6 +36,8 @@ jobs:
       matrix:
         os: ['windows-latest']
         # ['ubuntu-latest', 'macos-latest']
+    outputs:
+      version: ${{ needs.version.outputs.version }}
     steps:
 
       - name: Checking out the repo
@@ -58,7 +60,7 @@ jobs:
 
       - name: Build
         env:
-          VERSION: ${{needs.version.outputs.version}}
+          VERSION: ${{ needs.version.outputs.version }}
         shell: sh
         run: |
           OS=${{ matrix.os }}
@@ -85,7 +87,7 @@ jobs:
         run: pwd; ls -la; ls -la dist
       - name: Get version string
         env:
-          VERSION: ${{needs.version.outputs.version}}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
           echo "version: '$VERSION'"
   
