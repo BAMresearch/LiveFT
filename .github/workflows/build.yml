@@ -34,8 +34,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['windows-latest']
-        # ['ubuntu-latest', 'macos-latest']
+        os: ['windows-latest', 'macos-latest']
+        # ['ubuntu-latest']
     outputs:
       version: ${{ needs.version.outputs.version }}
     steps:
