@@ -10,7 +10,26 @@ on:
   workflow_dispatch:
 
 jobs:
+  version:
+    runs-on: 'ubuntu-latest'
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checking out the repo
+        uses: actions/checkout@v4
+
+      - name: Figure out version string
+        id: version
+        shell: sh
+        run: |
+          # get the latest commit hash in the short form
+          COMMIT=$(git rev-parse --short HEAD)
+          # get the latest commit date in the form of YYYYmmdd
+          DATE=$(git log -1 --format=%cd --date=format:'%y%m%d')
+          echo "version=${DATE}-${COMMIT}" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: [version]
     # convert this to a matrix if builds differ between platforms
     runs-on: ${{ matrix.os }}
     strategy:
@@ -38,14 +57,12 @@ jobs:
           python -m pip install pyinstaller
 
       - name: Build
+        env:
+          VERSION: ${{needs.version.outputs.version}}
         shell: sh
         run: |
-          # get the latest commit hash in the short form
-          COMMIT=$(git rev-parse --short HEAD)
-          # get the latest commit date in the form of YYYYmmdd
-          DATE=$(git log -1 --format=%cd --date=format:'%y%m%d')
           OS=${{ matrix.os }}
-          sed -i -e "s/\(name='\)\(.*\)\(',\)/\1\2-$DATE-$COMMIT-${OS%-*}\3/" LiveFT.spec
+          sed -i -e "s/\(name='\)\(.*\)\(',\)/\1\2-$VERSION-${OS%-*}\3/" LiveFT.spec
           pyinstaller LiveFT.spec
 
       - name: Store built packages for publishing later
@@ -66,6 +83,11 @@ jobs:
           path: dist
       - name: Check contents
         run: pwd; ls -la; ls -la dist
+      - name: Get version string
+        env:
+          VERSION: ${{needs.version.outputs.version}}
+        run: |
+          echo "version: '$VERSION'"
   
   # publish:
   #   needs: [build]
