@@ -64,7 +64,7 @@ jobs:
         shell: sh
         run: |
           OS=${{ matrix.os }}
-          sed -i -e "s/\(name='\)\(.*\)\(',\)/\1\2-$VERSION-${OS%-*}\3/" LiveFT.spec
+          sed -i -re "s/(name=['\"])([^'\"\.]+)((\.[^'\"]+)?['\"],)/\1\2-$VERSION-${OS%-*}\3/" LiveFT.spec
           pyinstaller LiveFT.spec
 
       - name: Store built packages for publishing later

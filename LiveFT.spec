@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
-
+# macOS, create DMG with:
+#   hdiutil create -fs HFS+ -srcfolder dist/LiveFT.app -volname LiveFT-xy LiveFT-xy.dmg
 
 a = Analysis(
     ['LiveFT.py'],
@@ -25,7 +26,6 @@ splash = Splash(
     minify_script=True,
     always_on_top=True,
 )
-
 exe = EXE(
     pyz,
     a.scripts,
@@ -47,4 +47,22 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='LiveFT',
+)
+app = BUNDLE(
+    coll,
+    name='LiveFT.app',
+    icon=None,
+    bundle_identifier=None,
+    info_plist={
+        'NSCameraUsageDescription': 'Pleease! ^_^'
+    },
 )
