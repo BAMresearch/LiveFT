@@ -61,7 +61,7 @@ jobs:
       - name: Download previuously built package artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: packages-*
+          pattern: package-*
           merge-multiple: true
           path: dist
       - name: Check contents
