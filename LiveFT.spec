@@ -16,13 +16,15 @@ a = Analysis(
     optimize=0,
 )
 pyz = PYZ(a.pure)
+# to avoid pink borders, the splash image needs to be filtered, as in here:
+#  https://github.com/pyinstaller/pyinstaller/issues/8579#issuecomment-2226981506
 splash = Splash(
     'splash.png',
     binaries=a.binaries,
     datas=a.datas,
     text_pos=(10,50),
     text_size=12,
-    text_color='white',
+    text_color='darkgray',
     minify_script=True,
     always_on_top=True,
 )
