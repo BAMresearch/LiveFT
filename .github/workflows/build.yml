@@ -34,8 +34,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['windows-latest', 'macos-latest']
-        # [ 'ubuntu-latest']
+        # preferring older OS versions for better backward compat,
+        # the build platform may be the oldest platform it works on
+        os: [ 'ubuntu-22.04' ]
+        # [ 'ubuntu-22.04', 'windows-latest', 'macos-latest']
     outputs:
       version: ${{ needs.version.outputs.version }}
     steps:
