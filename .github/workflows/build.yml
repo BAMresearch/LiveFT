@@ -72,13 +72,21 @@ jobs:
           pyinstaller LiveFT.spec
 
       - name: Create DMG
-        if: matrix.os == 'macos-latest'
+        if: startsWith(matrix.os, 'macos')
         shell: sh
         run: |
           cd dist
           fn="$(ls -d LiveFT*.app)"; fn="${fn%.*}"
           hdiutil create -fs HFS+ -srcfolder "$fn.app" -volname "$fn" "$fn.dmg"
           rm -Rf "$fn.app" "$fn"
+
+      - name: Append .bin suffix on Linux
+        if: startsWith(matrix.os, 'ubuntu')
+        shell: sh
+        run: |
+          cd dist
+          fn="$(ls -1 LiveFT* | head -n1)"
+          mv "$fn" "$fn.bin"
 
       - name: Check what was created
         shell: sh
