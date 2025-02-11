@@ -38,7 +38,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
-
+coll, app = None, None
 if system().startswith("Darwin"):
     # macOS specific config
     coll = COLLECT(
