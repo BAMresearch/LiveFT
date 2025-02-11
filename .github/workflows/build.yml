@@ -34,8 +34,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['windows-latest', 'macos-latest']
-        # ['ubuntu-latest']
+        os: ['macos-latest']
+        # ['windows-latest', 'ubuntu-latest']
     outputs:
       version: ${{ needs.version.outputs.version }}
     steps:
@@ -64,9 +64,11 @@ jobs:
         shell: sh
         run: |
           OS=${{ matrix.os }}
-          sed -i -e "s/\(name=['\"]\)\([^'\"\.]\+\)\(\(\.[^'\"]\+\)\?['\"],\)/\1\2-$VERSION-${OS%-*}\3/" LiveFT.spec
-          cat LiveFT.spec # show result of sed replacement
-          pyinstaller LiveFT.spec
+          #sed -i -e "s/\(name=['\"]\)\([^'\"\.]\+\)\(\(\.[^'\"]\+\)\?['\"],\)/\1\2-$VERSION-${OS%-*}\3/" LiveFT.spec
+          #cat LiveFT.spec # show result of sed replacement
+          #pyinstaller LiveFT.spec
+          pyinstaller --windowed --onedir LiveFT.py
+          cat LiveFT.spec
 
       - name: Create DMG
         if: matrix.os == 'macos-latest'
