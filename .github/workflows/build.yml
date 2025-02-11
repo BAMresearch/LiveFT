@@ -60,14 +60,23 @@ jobs:
           python -m pip install --progress-bar=off -r requirements.txt
           python -m pip install pyinstaller
 
+      - name: Get OS and machine architecture
+        id: os
+        shell: python
+        run: |
+            import os, platform
+            machine = platform.machine().replace("x86_", "intel")
+            with open(os.environ["GITHUB_OUTPUT"], "a") as fd:
+                fd.write(f"res={platform.system()}-{machine}\n")
+
       - name: Build
         env:
           VERSION: ${{ needs.version.outputs.version }}
         shell: sh
         run: |
-          OS=${{ matrix.os }}
+          OS=${{ steps.os.outputs.res }}
           which sed
-          sed -E -i -e "s/(name=['\"])([^'\"\.]+)((\.[^'\"]+)?['\"],)/\1\2-$VERSION-${OS%-*}\3/" LiveFT.spec
+          sed -E -i -e "s/(name=['\"])([^'\"\.]+)((\.[^'\"]+)?['\"],)/\1\2-$VERSION-${OS}\3/" LiveFT.spec
           cat LiveFT.spec # show result of sed replacement
           pyinstaller LiveFT.spec
 
