@@ -52,5 +52,10 @@ if system().startswith("Darwin"):
         name='LiveFT.app',
         icon=None,
         bundle_identifier=None,
+        info_plist={
+            'NSCameraUsageDescription': 'Pleease! ^_^',
+            'NSPrincipalClass': 'NSApplication',
+            'NSAppleScriptEnabled': False,
+        },
     )
 
