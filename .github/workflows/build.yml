@@ -65,6 +65,7 @@ jobs:
         run: |
           OS=${{ matrix.os }}
           sed -i -e "s/\(name=['\"]\)\([^'\"\.]\+\)\(\(\.[^'\"]\+\)\?['\"],\)/\1\2-$VERSION-${OS%-*}\3/" LiveFT.spec
+          cat LiveFT.spec # show result of sed replacement
           pyinstaller LiveFT.spec
 
       - name: Create DMG
