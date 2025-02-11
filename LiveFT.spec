@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    exclude_binaries=True, #system().startswith("Darwin"), # has to be False for Windows, it seems
+    exclude_binaries=system().startswith("Darwin"), # has to be False for Windows, it seems
     name='LiveFT',
     debug=False,
     bootloader_ignore_signals=False,
