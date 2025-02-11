@@ -36,7 +36,7 @@ jobs:
       matrix:
         # preferring older OS versions for better backward compat,
         # the build platform may be the oldest platform it works on
-        os: [ 'ubuntu-22.04' ]
+        os: [ 'ubuntu-22.04', 'ubuntu-22.04-arm', 'windows-2022', 'macos-14', 'macos-13' ]
         # [ 'ubuntu-22.04', 'windows-latest', 'macos-latest']
     outputs:
       version: ${{ needs.version.outputs.version }}
