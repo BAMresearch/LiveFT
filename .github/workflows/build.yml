@@ -84,6 +84,12 @@ jobs:
         if: startsWith(matrix.os, 'macos')
         shell: sh
         run: |
+          if [ ${{ matrix.os }} == "macos-13" ]; then
+            # workaround 'hdiutil: create failed - Resource busy'
+            # https://github.com/actions/runner-images/issues/7522#issuecomment-1556766641
+            sudo pkill -9 XProtect >/dev/null || true;
+            while pgrep XProtect; do sleep 3; done;
+          fi
           cd dist
           fn="$(ls -d LiveFT*.app)"; fn="${fn%.*}"
           hdiutil create -fs HFS+ -srcfolder "$fn.app" -volname "$fn" "$fn.dmg"
