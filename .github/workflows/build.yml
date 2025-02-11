@@ -65,7 +65,7 @@ jobs:
         shell: python
         run: |
             import os, platform
-            machine = platform.machine().replace("x86_", "intel")
+            machine = platform.machine().replace("x86_", "intel").replace("AMD", "intel")
             with open(os.environ["GITHUB_OUTPUT"], "a") as fd:
                 fd.write(f"res={platform.system()}-{machine}\n")
 
