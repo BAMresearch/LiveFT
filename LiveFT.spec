@@ -1,5 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from platform import system
+
 a = Analysis(
     ['LiveFT.py'],
     pathex=[],
@@ -14,10 +16,11 @@ a = Analysis(
     optimize=0,
 )
 pyz = PYZ(a.pure)
-
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.datas,
     [],
     exclude_binaries=True,
     name='LiveFT',
@@ -32,19 +35,22 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='LiveFT',
-)
-app = BUNDLE(
-    coll,
-    name='LiveFT.app',
-    icon=None,
-    bundle_identifier=None,
-)
+coll, app = None, None
+if system().startswith("Darwin"):
+    # macOS specific config
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.datas,
+        strip=False,
+        upx=True,
+        upx_exclude=[],
+        name='LiveFT',
+    )
+    app = BUNDLE(
+        coll,
+        name='LiveFT.app',
+        icon=None,
+        bundle_identifier=None,
+    )
 
