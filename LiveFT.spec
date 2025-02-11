@@ -2,6 +2,8 @@
 # macOS, create DMG with:
 #   hdiutil create -fs HFS+ -srcfolder dist/LiveFT.app -volname LiveFT-xy LiveFT-xy.dmg
 
+from platform import system
+
 a = Analysis(
     ['LiveFT.py'],
     pathex=[],
@@ -16,25 +18,11 @@ a = Analysis(
     optimize=0,
 )
 pyz = PYZ(a.pure)
-# to avoid pink borders, the splash image needs to be filtered, as in here:
-#  https://github.com/pyinstaller/pyinstaller/issues/8579#issuecomment-2226981506
-splash = Splash(
-    'splash.png',
-    binaries=a.binaries,
-    datas=a.datas,
-    text_pos=(10,50),
-    text_size=12,
-    text_color='darkgray',
-    minify_script=True,
-    always_on_top=True,
-)
 exe = EXE(
     pyz,
     a.scripts,
     a.binaries,
     a.datas,
-    splash,
-    splash.binaries,
     [],
     name='LiveFT',
     debug=False,
@@ -50,21 +38,26 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='LiveFT',
-)
-app = BUNDLE(
-    coll,
-    name='LiveFT.app',
-    icon=None,
-    bundle_identifier=None,
-    info_plist={
-        'NSCameraUsageDescription': 'Pleease! ^_^'
-    },
-)
+
+if system().startswith("Darwin"):
+    # macOS specific config
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.datas,
+        strip=False,
+        upx=True,
+        upx_exclude=[],
+        name='LiveFT',
+    )
+    app = BUNDLE(
+        coll,
+        name='LiveFT.app',
+        icon=None,
+        bundle_identifier=None,
+        info_plist={
+            'NSCameraUsageDescription': 'Pleease! ^_^',
+            'NSPrincipalClass': 'NSApplication',
+            'NSAppleScriptEnabled': False,
+        },
+    )

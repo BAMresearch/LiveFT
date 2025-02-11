@@ -197,12 +197,6 @@ class LiveFT:
         cv2.namedWindow(self.figid, cv2.WINDOW_GUI_NORMAL | cv2.WINDOW_NORMAL)
         cv2.resizeWindow(self.figid, 1024, 768)
 
-        try: # close splash screen, only if standalone/frozen
-            import pyi_splash
-            pyi_splash.close()
-        except ImportError:
-            pass # ignore, works in frozen app onbly
-
         self.frameTime = np.zeros(self.frameTimeCount)
         # Start main loop for capturing and processing frames
         self.run()
