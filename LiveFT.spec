@@ -13,7 +13,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['matplotlib', 'sqlite3', 'PIL', 'pandas', 'networkx', 'torch.onnx', 'sympy'],
+    excludes=[],
     noarchive=False,
     optimize=0,
 )
