@@ -19,9 +19,7 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
-    [],
+    *(([]) if system().startswith("Darwin") else (a.binaries, a.datas, [])),
     exclude_binaries=system().startswith("Darwin"), # has to be False for Windows, it seems
     name='LiveFT',
     debug=False,
