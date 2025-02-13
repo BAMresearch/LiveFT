@@ -32,6 +32,7 @@ exe = EXE(
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
+    # https://developer.apple.com/forums/thread/691986
     codesign_identity=None,
     entitlements_file=None,
 )
