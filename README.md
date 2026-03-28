@@ -1,6 +1,7 @@
 # Live Fourier Transform of Camera Feed
 
-This Python program captures images from a camera feed, applies a Fourier transform (FFT) using PyTorch for GPU acceleration and multicore processing, and displays the transformed image alongside the original.
+This Python program captures images from a camera feed, applies a Fourier transform (FFT) with OpenCV and NumPy, and
+displays the transformed image alongside the original.
 
 This can be used to explain concepts such as the Fourier Transform, but also scattering and diffraction effects, 
 if the lecturer shows printouts of the library of shapes and arrays in front of the camera. 
@@ -35,9 +36,12 @@ Press "q" to exit the application
 - `-f, --figid`: Name for the display window.
 - `-r, --rows`: Number of central rows to use in video frame cropping.
 - `-c, --columns`: Number of central columns to use in video frame cropping.
+- `-o, --showRadialProfile`: Show the FFT radial distribution panel.
+- `-e, --fftGamma`: Set the FFT display gamma.
+- `-m, --maxFPS`: Limit processing speed to N FPS. Use `0` to disable the limit.
 
 ### Notes
-- This program uses PyTorch for FFT calculations, with GPU acceleration if available.
+- This program uses OpenCV and NumPy for FFT calculations.
 - Tested on MacOS and Linux environments.
 
 ## License

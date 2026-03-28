@@ -43,8 +43,7 @@ This plan focuses on:
    `LiveFT.__attrs_post_init__()` opens the camera, creates a window, and immediately starts the main loop. That makes unit testing and reuse harder than necessary.
 
 4. Some flags and docs no longer match the implementation.
-   - `README.md` says the main app uses PyTorch/GPU, but `LiveFT.py` is OpenCV/Numpy based.
-   - `noGPU` exists in `LiveFT.py` but is not used by the current processing path.
+   - `README.md` still needs to match the current app behavior as features evolve.
 
 5. The release metadata is not ready for public macOS distribution.
    In `LiveFT.spec`:
@@ -96,8 +95,6 @@ Expected result:
   - run loop
 - [ ] Keep `FrameProcessor` pure and easy to test.
 - [ ] Introduce a small camera abstraction or wrapper for `cv2.VideoCapture`.
-- [ ] Remove or implement dead/placeholder options:
-  - `noGPU`
 - [ ] Add guards against divide-by-zero in normalization paths.
 
 Expected result:

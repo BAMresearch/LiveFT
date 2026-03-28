@@ -205,7 +205,6 @@ class FrameProcessor:
         y = np.linspace(-1.0, 1.0, h)
         x, y = np.meshgrid(x, y)
         # Create a window using the error function
-        # largest difference to torch result is <1e-7, torch has lower precision probably
         window_x = erf_vectorized((x + 1) / self.taperWidth) * erf_vectorized((1 - x) / self.taperWidth)
         window_y = erf_vectorized((y + 1) / self.taperWidth) * erf_vectorized((1 - y) / self.taperWidth)
         self.window = window_x * window_y
@@ -222,7 +221,6 @@ class FrameProcessor:
 
     def applyWindow(self, frame: np.ndarray) -> np.ndarray:
         # Create a window using the error function
-        # largest difference to torch result is <1e-7, torch has lower precision probably
         if self.window is None:
             h, w = frame.shape
             self.setWindow(w, h)
@@ -289,9 +287,6 @@ class LiveFT:
     showRadialProfile: bool = field(
         default=False,
         metadata={"help": "Show FFT radial distribution panel", "short": "o"},
-    )
-    noGPU: bool = field(
-        default=True, metadata={"help": "Switch between CPU or GPU for Fourier Transform", "short": "g"}
     )
     fftGamma: float = field(
         default=1.0,

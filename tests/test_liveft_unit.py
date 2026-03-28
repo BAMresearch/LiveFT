@@ -196,19 +196,17 @@ def test_parse_args_uses_liveft_defaults(monkeypatch: pytest.MonkeyPatch) -> Non
     assert args.killCenterLines is False
     assert args.showInfo is False
     assert args.showRadialProfile is False
-    assert args.noGPU is True
     assert args.fftGamma == pytest.approx(1.0)
     assert args.maxFPS == pytest.approx(0.0)
 
 
 def test_parse_args_toggles_boolean_flags(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["liveft", "-k", "-i", "-o", "-g", "-e", "1.4", "-m", "25"])
+    monkeypatch.setattr(sys, "argv", ["liveft", "-k", "-i", "-o", "-e", "1.4", "-m", "25"])
 
     args = parse_args(LiveFT)
 
     assert args.killCenterLines is True
     assert args.showInfo is True
     assert args.showRadialProfile is True
-    assert args.noGPU is False
     assert args.fftGamma == pytest.approx(1.4)
     assert args.maxFPS == pytest.approx(25.0)
