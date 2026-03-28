@@ -1,13 +1,12 @@
 import pymupdf
-import io
-from PIL import Image
 import cv2
 import numpy as np
-import sys
 from pathlib import Path
 import pytest
 
-from LiveFT import LiveFT, FrameProcessor
+from LiveFT import FrameProcessor
+
+pytestmark = [pytest.mark.regression, pytest.mark.slow]
 
 inputDir  = "images"
 outputDir = "testdata"
