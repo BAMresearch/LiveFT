@@ -303,50 +303,83 @@ class LiveFT:
     )
 
     # Derived attributes initialized post-instantiation
-    vc: cv2.VideoCapture = field(init=False, validator=validators.instance_of(cv2.VideoCapture))
+    vc: cv2.VideoCapture | None = field(init=False, default=None)
     optionsInteractive: Tuple[str] = field(default=("showHelp", "showInfo", "showRadialProfile", "killCenterLines"))
+    windowInitialized: bool = field(init=False, default=False)
     lastDisplayShape: tuple[int, int] | None = field(init=False, default=None)
-    frameTime: np.ndarray = field(init=False)  # array for moving average of frame calc. time
+    frameTime: np.ndarray | None = field(init=False, default=None)  # moving average of frame calc. time
     frameProc: FrameProcessor = field(factory=FrameProcessor)
 
     # not an attribute available as cmdline argument
     showHelp: bool = field(default=False, metadata={"help": "Show interactive help text", "short": "h"})
 
-    def __attrs_post_init__(self) -> None:
-        """Initialize video capture and plotting after attribute setup."""
+    def _requireCapture(self) -> cv2.VideoCapture:
+        if self.vc is None:
+            raise RuntimeError("LiveFT.setup() must be called before using the camera.")
+        return self.vc
 
-        # Open camera device
-        self.vc = cv2.VideoCapture(self.camDevice)
-        if not self.vc.isOpened():
-            raise ValueError("Could not open video device.")
-        # Set desired resolution based on desired colums & rows
-        res = [(w, h) for w, h in typRes if w >= self.columns and h >= self.rows]
-        res = res[0] if res else typRes[-1]  # pick the largest if none was found
-        self.vc.set(cv2.CAP_PROP_FRAME_WIDTH, res[0])
-        self.vc.set(cv2.CAP_PROP_FRAME_HEIGHT, res[1])
-        # Set the codec to MJPEG which much faster often
-        fourcc = cv2.VideoWriter_fourcc(*"MJPG")
-        self.vc.set(cv2.CAP_PROP_FOURCC, fourcc)
-        # change the desired fps of the video source
-        desired_fps = 240  # typically lower, limited by camera driver support
-        self.vc.set(cv2.CAP_PROP_FPS, desired_fps)
+    def _requireFrameTime(self) -> np.ndarray:
+        if self.frameTime is None:
+            raise RuntimeError("LiveFT.setup() must be called before processing frames.")
+        return self.frameTime
 
-        # Initialize display window
-        cv2.namedWindow(self.figid, cv2.WINDOW_GUI_NORMAL | cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(self.figid, 1024, 768)
+    def setup(self) -> None:
+        """Initialize the camera, window, and timing state."""
+        if self.vc is None:
+            vc = cv2.VideoCapture(self.camDevice)
+            if not vc.isOpened():
+                raise ValueError("Could not open video device.")
 
-        self.frameTime = np.zeros(self.frameTimeCount)
-        # Start main loop for capturing and processing frames
-        self.run()
+            # Set desired resolution based on desired colums & rows
+            res = [(w, h) for w, h in typRes if w >= self.columns and h >= self.rows]
+            res = res[0] if res else typRes[-1]  # pick the largest if none was found
+            vc.set(cv2.CAP_PROP_FRAME_WIDTH, res[0])
+            vc.set(cv2.CAP_PROP_FRAME_HEIGHT, res[1])
+            # Set the codec to MJPEG which much faster often
+            fourcc = cv2.VideoWriter_fourcc(*"MJPG")
+            vc.set(cv2.CAP_PROP_FOURCC, fourcc)
+            # change the desired fps of the video source
+            desired_fps = 240  # typically lower, limited by camera driver support
+            vc.set(cv2.CAP_PROP_FPS, desired_fps)
+            self.vc = vc
+
+        if not self.windowInitialized:
+            cv2.namedWindow(self.figid, cv2.WINDOW_GUI_NORMAL | cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(self.figid, 1024, 768)
+            self.windowInitialized = True
+            self.lastDisplayShape = None
+
+        if self.frameTime is None or self.frameTime.size != self.frameTimeCount:
+            self.frameTime = np.zeros(self.frameTimeCount)
+
+    def close(self) -> None:
+        """Release the camera and destroy the window."""
+        if self.vc is not None:
+            self.vc.release()
+            self.vc = None
+        if self.windowInitialized:
+            cv2.destroyAllWindows()
+            self.windowInitialized = False
+        self.frameTime = None
+        self.lastDisplayShape = None
+
+    def start(self) -> None:
+        """Set up resources, run the application, and clean up."""
+        self.setup()
+        try:
+            self.run()
+        finally:
+            self.close()
 
     def drawInfoText(self, frame, infoData) -> None:
+        vc = self._requireCapture()
         drawTextLine(frame, 0, ", ".join([f"{k}: {v}" for k, v in infoData.items()]))
         # show the current camera resolution
-        actual_width = int(self.vc.get(cv2.CAP_PROP_FRAME_WIDTH))
-        actual_height = int(self.vc.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        actual_width = int(vc.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_height = int(vc.get(cv2.CAP_PROP_FRAME_HEIGHT))
         # show the video stream format as well
         video_text = f"{actual_width}x{actual_height}"
-        fourcc = int(self.vc.get(cv2.CAP_PROP_FOURCC))
+        fourcc = int(vc.get(cv2.CAP_PROP_FOURCC))
         if fourcc > 31:
             video_text += "@" + fourcc.to_bytes(4, byteorder=sys.byteorder).decode()
         drawTextLine(frame, 1, f"(Input: {video_text})")
@@ -388,6 +421,8 @@ class LiveFT:
 
     def run(self) -> None:
         """Main loop to capture and process frames from the camera."""
+        self._requireCapture()
+        self._requireFrameTime()
         num_frames = 0
         frames_counted = 0
         start_time = time.time()  # for calculating FPS including capturing
@@ -437,15 +472,13 @@ class LiveFT:
                     self.lastDisplayShape = frame_shape
                 cv2.imshow(self.figid, frame_final)
 
-        self.vc.release()
-        cv2.destroyAllWindows()
-
     def captureFrame(self) -> np.ndarray:
         """Capture, process, and display a single frame."""
+        vc = self._requireCapture()
         frame = None
         nframes = 0
         while nframes < self.imAvgs:
-            success, iframe = self.vc.read()
+            success, iframe = vc.read()
             if not success:
                 raise ValueError("Failed to capture frame.")
                 # return np.array([])
@@ -459,6 +492,7 @@ class LiveFT:
         return frame
 
     def composeFrame(self, frameIdx: int, infoData: dict) -> np.ndarray:
+        frame_time_values = self._requireFrameTime()
         frame = self.captureFrame()
         frame_time = time.time()  # calculation time of a single frame, without capturing
 
@@ -490,9 +524,9 @@ class LiveFT:
             framesCombined = np.concatenate((framesCombined, radial_panel), axis=0)
 
         # record how long this frame took to process
-        self.frameTime[frameIdx % self.frameTime.size] = time.time() - frame_time
+        frame_time_values[frameIdx % frame_time_values.size] = time.time() - frame_time
         # show the frame time average for info overlay
-        infoData["frame time"] = f"{self.frameTime.mean() * 1e3:.1f} ms"
+        infoData["frame time"] = f"{frame_time_values.mean() * 1e3:.1f} ms"
         return framesCombined
 
 
@@ -515,6 +549,11 @@ def parse_args(liveftCls: type[LiveFT]) -> argparse.Namespace:
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def main() -> None:
     args = parse_args(LiveFT)
     live_ft = LiveFT(**vars(args))
+    live_ft.start()
+
+
+if __name__ == "__main__":
+    main()

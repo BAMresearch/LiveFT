@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import pytest
 
+import LiveFT as liveft_module
 from LiveFT import (
     FrameProcessor,
     LiveFT,
@@ -210,3 +211,77 @@ def test_parse_args_toggles_boolean_flags(monkeypatch: pytest.MonkeyPatch) -> No
     assert args.showRadialProfile is True
     assert args.fftGamma == pytest.approx(1.4)
     assert args.maxFPS == pytest.approx(25.0)
+
+
+def test_liveft_constructor_is_side_effect_free() -> None:
+    liveft = LiveFT(numShots=1)
+
+    assert liveft.vc is None
+    assert liveft.frameTime is None
+    assert liveft.windowInitialized is False
+    assert liveft.lastDisplayShape is None
+
+
+def test_liveft_setup_and_close_manage_resources(monkeypatch: pytest.MonkeyPatch) -> None:
+    state: dict[str, object] = {}
+
+    class FakeVideoCapture:
+        def __init__(self, device: int) -> None:
+            self.device = device
+            self.settings: dict[int, float] = {}
+            self.released = False
+
+        def isOpened(self) -> bool:
+            return True
+
+        def set(self, prop: int, value: float) -> bool:
+            self.settings[prop] = value
+            return True
+
+        def get(self, prop: int) -> float:
+            return self.settings.get(prop, 0.0)
+
+        def read(self) -> tuple[bool, np.ndarray]:
+            return True, np.zeros((4, 4, 3), dtype=np.uint8)
+
+        def release(self) -> None:
+            self.released = True
+
+    def fake_video_capture(device: int) -> FakeVideoCapture:
+        capture = FakeVideoCapture(device)
+        state["capture"] = capture
+        return capture
+
+    monkeypatch.setattr(liveft_module.cv2, "VideoCapture", fake_video_capture)
+    monkeypatch.setattr(liveft_module.cv2, "VideoWriter_fourcc", lambda *args: 1234)
+    monkeypatch.setattr(liveft_module.cv2, "namedWindow", lambda *args: state.setdefault("named", []).append(args))
+    monkeypatch.setattr(liveft_module.cv2, "resizeWindow", lambda *args: state.setdefault("resized", []).append(args))
+    monkeypatch.setattr(liveft_module.cv2, "destroyAllWindows", lambda: state.setdefault("destroyed", 0) or None)
+
+    liveft = LiveFT(numShots=1, rows=100, columns=100)
+    liveft.setup()
+    liveft.setup()
+
+    capture = state["capture"]
+    assert isinstance(capture, FakeVideoCapture)
+    assert liveft.vc is capture
+    assert liveft.frameTime is not None
+    assert liveft.frameTime.shape == (liveft.frameTimeCount,)
+    assert liveft.windowInitialized is True
+    assert len(state["named"]) == 1
+    assert len(state["resized"]) == 1
+
+    liveft.close()
+
+    assert capture.released is True
+    assert liveft.vc is None
+    assert liveft.frameTime is None
+    assert liveft.windowInitialized is False
+    assert liveft.lastDisplayShape is None
+
+
+def test_run_requires_setup() -> None:
+    liveft = LiveFT(numShots=1)
+
+    with pytest.raises(RuntimeError):
+        liveft.run()
