@@ -4,7 +4,15 @@ import cv2
 import numpy as np
 import pytest
 
-from LiveFT import FrameProcessor, LiveFT, limitFPS, parse_args
+from LiveFT import (
+    FrameProcessor,
+    LiveFT,
+    computeRadialProfile,
+    getRadialProfileBins,
+    limitFPS,
+    parse_args,
+    renderRadialProfile,
+)
 
 
 def reference_fft(frame: np.ndarray, kill_center_lines: bool = False) -> np.ndarray:
@@ -95,6 +103,41 @@ def test_compute_fft_handles_flat_signal_after_center_line_removal() -> None:
     np.testing.assert_array_equal(fft, np.zeros((8, 8), dtype=np.float32))
 
 
+def test_compute_radial_profile_of_uniform_image_is_flat() -> None:
+    profile = computeRadialProfile(np.ones((5, 5), dtype=np.float32))
+
+    np.testing.assert_allclose(profile, np.ones(profile.shape, dtype=np.float32))
+
+
+def test_radial_profile_bins_are_cached_per_shape() -> None:
+    radii_first, counts_first = getRadialProfileBins((5, 5))
+    radii_second, counts_second = getRadialProfileBins((5, 5))
+
+    assert radii_first is radii_second
+    assert counts_first is counts_second
+
+
+def test_compute_radial_profile_of_center_spike_is_center_weighted() -> None:
+    image = np.zeros((5, 5), dtype=np.float32)
+    image[2, 2] = 1.0
+
+    profile = computeRadialProfile(image)
+
+    assert profile[0] == pytest.approx(1.0)
+    np.testing.assert_array_equal(profile[1:], np.zeros(profile.shape[0] - 1, dtype=np.float32))
+
+
+def test_render_radial_profile_returns_nonempty_panel() -> None:
+    profile = np.array([0.0, 0.5, 1.0], dtype=np.float32)
+
+    panel = renderRadialProfile(profile, width=64, height=32)
+
+    assert panel.shape == (32, 64)
+    assert panel.dtype == np.float32
+    assert np.isfinite(panel).all()
+    assert panel.max() == pytest.approx(1.0)
+
+
 def test_limit_fps_sleeps_until_the_next_frame_budget() -> None:
     current_time = {"value": 1.0}
     sleep_calls = []
@@ -136,17 +179,19 @@ def test_parse_args_uses_liveft_defaults(monkeypatch: pytest.MonkeyPatch) -> Non
     assert args.imAvgs == 1
     assert args.killCenterLines is False
     assert args.showInfo is False
+    assert args.showRadialProfile is False
     assert args.noGPU is True
     assert args.maxFPS == pytest.approx(0.0)
 
 
 def test_parse_args_toggles_boolean_flags(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["liveft", "-k", "-i", "-p", "-g", "-m", "25"])
+    monkeypatch.setattr(sys, "argv", ["liveft", "-k", "-i", "-o", "-p", "-g", "-m", "25"])
 
     args = parse_args(LiveFT)
 
     assert args.killCenterLines is True
     assert args.showInfo is True
+    assert args.showRadialProfile is True
     assert args.downScale is True
     assert args.noGPU is False
     assert args.maxFPS == pytest.approx(25.0)

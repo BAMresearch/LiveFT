@@ -27,6 +27,7 @@ import argparse
 import math
 import sys
 import time
+from functools import lru_cache
 from typing import Tuple
 
 import cv2
@@ -89,6 +90,73 @@ def limitFPS(
         now = time_fn()
 
     return max(next_frame_time + frame_interval, now)
+
+
+@lru_cache(maxsize=16)
+def getRadialProfileBins(shape: tuple[int, int]) -> tuple[np.ndarray, np.ndarray]:
+    height, width = shape
+    center_y = (height - 1) / 2.0
+    center_x = (width - 1) / 2.0
+    y_coords, x_coords = np.indices(shape, dtype=np.float32)
+    radii = np.rint(np.sqrt((x_coords - center_x) ** 2 + (y_coords - center_y) ** 2)).astype(np.int32)
+    radii_flat = radii.ravel()
+    radial_counts = np.bincount(radii_flat)
+    return radii_flat, radial_counts
+
+
+def computeRadialProfile(image: np.ndarray) -> np.ndarray:
+    if image.ndim != 2:
+        raise ValueError("Radial profile expects a 2D image.")
+
+    radii_flat, radial_counts = getRadialProfileBins(image.shape)
+    image_flat = image.astype(np.float32, copy=False).ravel()
+    radial_sums = np.bincount(radii_flat, weights=image_flat, minlength=radial_counts.size)
+    profile = np.divide(
+        radial_sums,
+        radial_counts,
+        out=np.zeros_like(radial_sums, dtype=np.float32),
+        where=radial_counts > 0,
+    )
+    return profile.astype(np.float32, copy=False)
+
+
+def renderRadialProfile(profile: np.ndarray, width: int, height: int = 160) -> np.ndarray:
+    panel = np.zeros((height, width), dtype=np.float32)
+    if width <= 0 or height <= 0:
+        return panel
+
+    left_margin = 40
+    right_margin = 16
+    top_margin = 24
+    bottom_margin = 24
+    x_axis_y = height - bottom_margin
+    x_axis_end = max(left_margin, width - right_margin - 1)
+    plot_height = max(1, x_axis_y - top_margin)
+
+    cv2.line(panel, (left_margin, top_margin), (left_margin, x_axis_y), 0.35, 1)
+    cv2.line(panel, (left_margin, x_axis_y), (x_axis_end, x_axis_y), 0.35, 1)
+    cv2.putText(panel, "Radial FFT", (left_margin, 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 0.8, 1)
+
+    if profile.size == 0:
+        return panel
+
+    profile_scaled = normalizeUnit(profile)
+    x_positions = np.rint(np.linspace(left_margin, x_axis_end, num=profile.size)).astype(np.int32)
+    y_positions = x_axis_y - np.rint(profile_scaled * plot_height).astype(np.int32)
+
+    if profile.size == 1:
+        cv2.circle(panel, (int(x_positions[0]), int(y_positions[0])), 1, 1.0, -1)
+        return panel
+
+    for start_x, start_y, end_x, end_y in zip(
+        x_positions[:-1],
+        y_positions[:-1],
+        x_positions[1:],
+        y_positions[1:],
+    ):
+        cv2.line(panel, (int(start_x), int(start_y)), (int(end_x), int(end_y)), 1.0, 1)
+
+    return panel
 
 
 def drawTextLine(frame: cv2.UMat, line_idx: int, text: str) -> None:
@@ -203,6 +271,10 @@ class LiveFT:
     rows: int = field(default=500, metadata={"help": "Use center N rows of video", "short": "r"})
     columns: int = field(default=500, metadata={"help": "Use center N columns of video", "short": "c"})
     showInfo: bool = field(default=False, metadata={"help": "Show FPS info text overlay", "short": "i"})
+    showRadialProfile: bool = field(
+        default=False,
+        metadata={"help": "Show FFT radial distribution panel", "short": "o"},
+    )
     noGPU: bool = field(
         default=True, metadata={"help": "Switch between CPU or GPU for Fourier Transform", "short": "g"}
     )
@@ -217,7 +289,10 @@ class LiveFT:
 
     # Derived attributes initialized post-instantiation
     vc: cv2.VideoCapture = field(init=False, validator=validators.instance_of(cv2.VideoCapture))
-    optionsInteractive: Tuple[str] = field(default=("showHelp", "showInfo", "downScale", "killCenterLines"))
+    optionsInteractive: Tuple[str] = field(
+        default=("showHelp", "showInfo", "showRadialProfile", "downScale", "killCenterLines")
+    )
+    lastDisplayShape: tuple[int, int] | None = field(init=False, default=None)
     frameTime: np.ndarray = field(init=False)  # array for moving average of frame calc. time
     frameProc: FrameProcessor = field(factory=FrameProcessor)
 
@@ -320,11 +395,11 @@ class LiveFT:
                 self.drawHelpText(frame_final)
 
             if frame_final.size:  # show the frame if there is any
-                (wx, wy, ww, wh) = cv2.getWindowImageRect(self.figid)
-                (fh, fw) = frame_final.shape
-                if num_frames == 1 and (ww != fw or wh != fh):
-                    # resize appropriately only once initially
-                    cv2.resizeWindow(self.figid, fw, fh)
+                frame_shape = frame_final.shape[:2]
+                if self.lastDisplayShape != frame_shape:
+                    frame_height, frame_width = frame_shape
+                    cv2.resizeWindow(self.figid, frame_width, frame_height)
+                    self.lastDisplayShape = frame_shape
                 cv2.imshow(self.figid, frame_final)
 
         self.vc.release()
@@ -372,6 +447,11 @@ class LiveFT:
 
         # normalize and convert to numpy array
         framesCombined = np.concatenate((frame, fft), axis=1)
+        if self.showRadialProfile:
+            profile = computeRadialProfile(fft)
+            radial_height = max(120, frame.shape[0] // 3)
+            radial_panel = renderRadialProfile(profile, framesCombined.shape[1], height=radial_height)
+            framesCombined = np.concatenate((framesCombined, radial_panel), axis=0)
 
         # record how long this frame took to process
         self.frameTime[frameIdx % self.frameTime.size] = time.time() - frame_time
