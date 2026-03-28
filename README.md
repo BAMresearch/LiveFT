@@ -69,6 +69,42 @@ The GitHub workflow uses these optional secrets for signed/notarized macOS relea
 - `MACOS_NOTARY_ISSUER`
 - `MACOS_NOTARY_KEY_P8`
 
+### macOS Release Secrets
+
+These `MACOS_*` values are intended for GitHub Actions repository or organization secrets.
+
+- `MACOS_CODESIGN_IDENTITY`
+  The exact signing identity name shown by Keychain for your Developer ID Application certificate.
+  Example: `Developer ID Application: Your Name or Company (TEAMID)`
+- `MACOS_CERTIFICATE_P12_BASE64`
+  A base64-encoded `.p12` export of the same Developer ID Application certificate, including its private key.
+  Export the certificate from Keychain Access as `.p12`, then base64-encode that file before storing it as a GitHub secret.
+- `MACOS_CERTIFICATE_PASSWORD`
+  The password you chose when exporting the `.p12` certificate bundle.
+- `MACOS_NOTARY_KEY_ID`
+  The App Store Connect API key ID used with `xcrun notarytool`.
+- `MACOS_NOTARY_ISSUER`
+  The issuer UUID associated with that App Store Connect API key.
+- `MACOS_NOTARY_KEY_P8`
+  The full contents of the `AuthKey_<KEY_ID>.p8` file for the notarization API key.
+  Paste the entire file into the GitHub secret, including the `BEGIN PRIVATE KEY` and `END PRIVATE KEY` lines.
+
+These are not the main local-shell variables. For local release runs, the scripts use:
+
+- `LIVEFT_CODESIGN_IDENTITY`
+- `LIVEFT_NOTARY_KEY_ID`
+- `LIVEFT_NOTARY_ISSUER`
+- `LIVEFT_NOTARY_KEY_FILE`
+
+Example local notarized release invocation:
+```bash
+LIVEFT_CODESIGN_IDENTITY="Developer ID Application: Your Name or Company (TEAMID)" \
+LIVEFT_NOTARY_KEY_ID="ABC123DEF4" \
+LIVEFT_NOTARY_ISSUER="00000000-0000-0000-0000-000000000000" \
+LIVEFT_NOTARY_KEY_FILE="$HOME/private_keys/AuthKey_ABC123DEF4.p8" \
+sh scripts/release_macos.sh
+```
+
 ## Options
 - `-n, --numShots`: Maximum number of images before program exits.
 - `-d, --camDevice`: Camera device ID to use.
