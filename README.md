@@ -31,7 +31,6 @@ Press "q" to exit the application
 - `-i, --imAvgs`: Number of images to average for display and FFT processing.
 - `-y, --vScale`: Vertical video scaling factor.
 - `-x, --hScale`: Horizontal video scaling factor.
-- `-p, --downScale`: Enable pyramidal downscaling for performance improvements.
 - `-k, --killCenterLines`: Remove central lines from FFT image to improve dynamic range.
 - `-f, --figid`: Name for the display window.
 - `-r, --rows`: Number of central rows to use in video frame cropping.

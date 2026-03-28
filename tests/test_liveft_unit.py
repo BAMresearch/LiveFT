@@ -7,6 +7,8 @@ import pytest
 from LiveFT import (
     FrameProcessor,
     LiveFT,
+    adjustGammaValue,
+    applyGamma,
     computeRadialProfile,
     getRadialProfileBins,
     limitFPS,
@@ -138,6 +140,20 @@ def test_render_radial_profile_returns_nonempty_panel() -> None:
     assert panel.max() == pytest.approx(1.0)
 
 
+def test_apply_gamma_darkens_midtones_for_gamma_above_one() -> None:
+    image = np.array([[0.0, 0.5, 1.0]], dtype=np.float32)
+
+    gamma_corrected = applyGamma(image, 2.0)
+
+    np.testing.assert_allclose(gamma_corrected, np.array([[0.0, 0.25, 1.0]], dtype=np.float32))
+
+
+def test_adjust_gamma_value_clamps_to_supported_range() -> None:
+    assert adjustGammaValue(1.0, 0.2) == pytest.approx(1.2)
+    assert adjustGammaValue(0.25, -1.0) == pytest.approx(0.2)
+    assert adjustGammaValue(4.95, 1.0) == pytest.approx(5.0)
+
+
 def test_limit_fps_sleeps_until_the_next_frame_budget() -> None:
     current_time = {"value": 1.0}
     sleep_calls = []
@@ -181,17 +197,18 @@ def test_parse_args_uses_liveft_defaults(monkeypatch: pytest.MonkeyPatch) -> Non
     assert args.showInfo is False
     assert args.showRadialProfile is False
     assert args.noGPU is True
+    assert args.fftGamma == pytest.approx(1.0)
     assert args.maxFPS == pytest.approx(0.0)
 
 
 def test_parse_args_toggles_boolean_flags(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["liveft", "-k", "-i", "-o", "-p", "-g", "-m", "25"])
+    monkeypatch.setattr(sys, "argv", ["liveft", "-k", "-i", "-o", "-g", "-e", "1.4", "-m", "25"])
 
     args = parse_args(LiveFT)
 
     assert args.killCenterLines is True
     assert args.showInfo is True
     assert args.showRadialProfile is True
-    assert args.downScale is True
     assert args.noGPU is False
+    assert args.fftGamma == pytest.approx(1.4)
     assert args.maxFPS == pytest.approx(25.0)

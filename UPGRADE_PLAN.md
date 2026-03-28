@@ -44,7 +44,6 @@ This plan focuses on:
 
 4. Some flags and docs no longer match the implementation.
    - `README.md` says the main app uses PyTorch/GPU, but `LiveFT.py` is OpenCV/Numpy based.
-   - `downScale` is labeled "not implemented yet".
    - `noGPU` exists in `LiveFT.py` but is not used by the current processing path.
 
 5. The release metadata is not ready for public macOS distribution.
@@ -98,7 +97,6 @@ Expected result:
 - [ ] Keep `FrameProcessor` pure and easy to test.
 - [ ] Introduce a small camera abstraction or wrapper for `cv2.VideoCapture`.
 - [ ] Remove or implement dead/placeholder options:
-  - `downScale`
   - `noGPU`
 - [ ] Add guards against divide-by-zero in normalization paths.
 

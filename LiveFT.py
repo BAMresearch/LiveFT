@@ -18,7 +18,7 @@ Profile with:
     python -m cProfile -o LiveFT.prof LiveFT.py -i -c 2000 -r 1000
     snakeviz LiveFT.prof
 
-Author: Brian R. Pauw with some suggestions from AI
+Authors: Brian R. Pauw, I. Bressler with Codex support
 Contact: brian@stack.nl
 License: Apache-2.0
 """
@@ -64,6 +64,9 @@ typRes = (
     (2304, 1536),
 )
 lineSpacing = 40
+MIN_FFT_GAMMA = 0.2
+MAX_FFT_GAMMA = 5.0
+FFT_GAMMA_STEP = 0.1
 
 
 def normalizeUnit(frame: np.ndarray) -> np.ndarray:
@@ -118,6 +121,21 @@ def computeRadialProfile(image: np.ndarray) -> np.ndarray:
         where=radial_counts > 0,
     )
     return profile.astype(np.float32, copy=False)
+
+
+def applyGamma(image: np.ndarray, gamma: float) -> np.ndarray:
+    if gamma <= 0:
+        raise ValueError("Gamma must be greater than zero.")
+
+    clipped = np.clip(image, 0.0, 1.0).astype(np.float32, copy=False)
+    if gamma == 1.0:
+        return clipped
+    return np.power(clipped, gamma).astype(np.float32, copy=False)
+
+
+def adjustGammaValue(current_gamma: float, delta: float) -> float:
+    adjusted = current_gamma + delta
+    return float(np.clip(adjusted, MIN_FFT_GAMMA, MAX_FFT_GAMMA))
 
 
 def renderRadialProfile(profile: np.ndarray, width: int, height: int = 160) -> np.ndarray:
@@ -260,9 +278,6 @@ class LiveFT:
     imAvgs: int = field(default=1, metadata={"help": "Average N images for display and FFT", "short": "a"})
     vScale: float = field(default=1.2, metadata={"help": "Vertical video scale", "short": "y"})
     hScale: float = field(default=1.2, metadata={"help": "Horizontal video scale", "short": "x"})
-    downScale: bool = field(
-        default=False, metadata={"help": "Enable pyramidal downscaling (not implemented yet)", "short": "p"}
-    )
     killCenterLines: bool = field(default=False, metadata={"help": "Remove central lines from FFT image", "short": "k"})
     figid: str = field(
         default="liveFFT by Brian R. Pauw - press 'h' for help, 'q' to exit.",
@@ -278,6 +293,11 @@ class LiveFT:
     noGPU: bool = field(
         default=True, metadata={"help": "Switch between CPU or GPU for Fourier Transform", "short": "g"}
     )
+    fftGamma: float = field(
+        default=1.0,
+        validator=validators.gt(0.0),
+        metadata={"help": "Display gamma for the FFT image", "short": "e"},
+    )
     maxFPS: float = field(
         default=0.0,
         validator=validators.ge(0.0),
@@ -289,9 +309,7 @@ class LiveFT:
 
     # Derived attributes initialized post-instantiation
     vc: cv2.VideoCapture = field(init=False, validator=validators.instance_of(cv2.VideoCapture))
-    optionsInteractive: Tuple[str] = field(
-        default=("showHelp", "showInfo", "showRadialProfile", "downScale", "killCenterLines")
-    )
+    optionsInteractive: Tuple[str] = field(default=("showHelp", "showInfo", "showRadialProfile", "killCenterLines"))
     lastDisplayShape: tuple[int, int] | None = field(init=False, default=None)
     frameTime: np.ndarray = field(init=False)  # array for moving average of frame calc. time
     frameProc: FrameProcessor = field(factory=FrameProcessor)
@@ -342,8 +360,14 @@ class LiveFT:
         """Draws a static help text into the frame."""
         lineOffset = 3
         drawTextLine(frame, lineOffset, "Help | press key:")
-        for index, attr in enumerate([a for a in fields(type(self)) if a.name in self.optionsInteractive]):
-            drawTextLine(frame, lineOffset + index + 1, attr.metadata["short"] + "-> " + attr.metadata["help"])
+        help_items = [
+            (attr.metadata["short"], attr.metadata["help"])
+            for attr in fields(type(self))
+            if attr.name in self.optionsInteractive
+        ]
+        help_items.append(("+/-", "Adjust FFT gamma"))
+        for index, (shortcut, help_text) in enumerate(help_items):
+            drawTextLine(frame, lineOffset + index + 1, f"{shortcut}-> {help_text}")
 
     def toggleShortOption(self, key) -> None:
         for a in fields(type(self)):
@@ -351,6 +375,21 @@ class LiveFT:
                 continue
             if key & 0xFF == ord(a.metadata["short"]):
                 setattr(self, a.name, not getattr(self, a.name))
+
+    def adjustGamma(self, delta: float) -> None:
+        updated_gamma = adjustGammaValue(self.fftGamma, delta)
+        if updated_gamma != self.fftGamma:
+            self.fftGamma = updated_gamma
+            print(f"FFT gamma: {self.fftGamma:.2f}")
+
+    def handleInteractiveKey(self, key) -> None:
+        self.toggleShortOption(key)
+
+        keycode = key & 0xFF
+        if keycode in {ord("+"), ord("=")}:
+            self.adjustGamma(FFT_GAMMA_STEP)
+        elif keycode in {ord("-"), ord("_")}:
+            self.adjustGamma(-FFT_GAMMA_STEP)
 
     def run(self) -> None:
         """Main loop to capture and process frames from the camera."""
@@ -368,7 +407,7 @@ class LiveFT:
             if key & 0xFF == ord("q"):
                 print("Exiting on user request.")
                 break
-            self.toggleShortOption(key)
+            self.handleInteractiveKey(key)
 
             # Check if the window is still open, break if closed
             if not cv2.getWindowProperty(self.figid, cv2.WND_PROP_VISIBLE):
@@ -385,6 +424,7 @@ class LiveFT:
 
             # Show info text on request
             if self.showInfo:
+                infoData["gamma"] = f"{self.fftGamma:.2f}"
                 if self.maxFPS > 0:
                     infoData["fps limit"] = f"{self.maxFPS:.2f}"
                 else:
@@ -444,9 +484,10 @@ class LiveFT:
         # forward options for the fourier transformed result
         self.frameProc.killCenterLines = self.killCenterLines
         frame, fft = self.frameProc(frame)
+        fft_display = applyGamma(fft, self.fftGamma)
 
         # normalize and convert to numpy array
-        framesCombined = np.concatenate((frame, fft), axis=1)
+        framesCombined = np.concatenate((frame, fft_display), axis=1)
         if self.showRadialProfile:
             profile = computeRadialProfile(fft)
             radial_height = max(120, frame.shape[0] // 3)
