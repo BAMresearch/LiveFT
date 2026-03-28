@@ -26,6 +26,31 @@ python LiveFT.py
 
 Press "q" to exit the application
 
+## Packaging
+Build a distributable bundle with:
+```bash
+pip install -r requirements_for_testing.txt
+sh scripts/build_dist.sh
+```
+
+The build script auto-detects `.venv/bin/python`, `python`, or `python3`. Override it with
+`LIVEFT_PYTHON=/path/to/python` when needed.
+
+Useful packaging environment variables:
+- `LIVEFT_BUNDLE_ID`
+- `LIVEFT_CAMERA_USAGE`
+- `LIVEFT_CODESIGN_IDENTITY`
+- `LIVEFT_ENTITLEMENTS_FILE`
+- `LIVEFT_ICON_PATH`
+- `PYINSTALLER_CONFIG_DIR`
+
+On macOS, create a DMG after the app bundle is built:
+```bash
+sh scripts/create_dmg.sh dist
+```
+
+Set `LIVEFT_KEEP_APP_AFTER_DMG=1` if you want to keep the `.app` bundle in `dist/` after the DMG is created.
+
 ## Options
 - `-n, --numShots`: Maximum number of images before program exits.
 - `-d, --camDevice`: Camera device ID to use.

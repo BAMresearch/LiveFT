@@ -4,3 +4,4 @@ pymupdf
 Pillow
 ruff
 pre-commit
+pyinstaller

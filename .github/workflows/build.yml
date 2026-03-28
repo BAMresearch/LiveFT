@@ -53,12 +53,16 @@ jobs:
           cache: pip
           cache-dependency-path: |
             requirements.txt
+            requirements_for_testing.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install --progress-bar=off -r requirements.txt
-          python -m pip install pyinstaller
+          python -m pip install --progress-bar=off -r requirements_for_testing.txt
+
+      - name: Run fast tests
+        run: python -m pytest -q
 
       - name: Get OS and machine architecture
         id: os
@@ -75,25 +79,19 @@ jobs:
         shell: sh
         run: |
           OS=${{ steps.os.outputs.res }}
-          which sed
-          sed -E -i -e "s/(name=['\"])([^'\"\.]+)((\.[^'\"]+)?['\"],)/\1\2-$VERSION-${OS}\3/" LiveFT.spec
-          cat LiveFT.spec # show result of sed replacement
-          pyinstaller LiveFT.spec
+          sh scripts/build_dist.sh "$VERSION" "$OS"
 
       - name: Create DMG
         if: startsWith(matrix.os, 'macos')
         shell: sh
         run: |
-          if [ ${{ matrix.os }} == "macos-13" ]; then
+          if [ "${{ matrix.os }}" = "macos-13" ]; then
             # workaround 'hdiutil: create failed - Resource busy'
             # https://github.com/actions/runner-images/issues/7522#issuecomment-1556766641
             sudo pkill -9 XProtect >/dev/null || true;
             while pgrep XProtect; do sleep 3; done;
           fi
-          cd dist
-          fn="$(ls -d LiveFT*.app)"; fn="${fn%.*}"
-          hdiutil create -fs HFS+ -srcfolder "$fn.app" -volname "$fn" "$fn.dmg"
-          rm -Rf "$fn.app" "$fn"
+          sh scripts/create_dmg.sh dist
 
       - name: Check what was created
         shell: sh

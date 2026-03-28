@@ -114,14 +114,14 @@ The app becomes more usable during demos and lectures, and the FFT visualization
 
 ### Phase 5: Packaging and repo cleanup
 
-- [ ] Keep the PyQt prototypes under `experiments/` and out of the supported app entry points.
-- [ ] Exclude `experiments/` from the default test/discovery/lint path unless work is explicitly happening there.
-- [ ] Stop checking built app bundles into the main source tree.
-- [ ] Extend `.gitignore` for:
+- [x] Keep the PyQt prototypes under `experiments/` and out of the supported app entry points.
+- [x] Exclude `experiments/` from the default test/discovery/lint path unless work is explicitly happening there.
+- [x] Stop checking built app bundles into the main source tree.
+- [x] Extend `.gitignore` for:
   - `binaries/`
   - macOS Finder files
   - build output directories
-- [ ] Consolidate developer dependencies.
+- [x] Consolidate developer dependencies.
   Prefer either:
   - `requirements-dev.txt`, or
   - a `pyproject.toml` with optional test/build dependencies
@@ -132,12 +132,12 @@ A cleaner repo and fewer accidental release or collection problems.
 ### Phase 6: macOS release pipeline
 
 - [ ] Update `LiveFT.spec` for proper app metadata:
-  - bundle identifier
-  - version metadata
-  - icon
-  - non-placeholder camera permission text
-  - signing identity and entitlements wiring
-- [ ] Replace the current `sed`-based spec mutation in CI with a dedicated build script.
+  - [x] bundle identifier
+  - [ ] version metadata
+  - [ ] icon
+  - [x] non-placeholder camera permission text
+  - [x] signing identity and entitlements wiring
+- [x] Replace the current `sed`-based spec mutation in CI with a dedicated build script.
 - [ ] Build a signed `.app`.
 - [ ] Notarize the app or the DMG.
 - [ ] Staple notarization tickets.
