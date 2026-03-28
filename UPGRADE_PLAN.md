@@ -15,99 +15,88 @@ This plan focuses on:
 ### What is already in place
 
 - Main app entry point: `LiveFT.py`
-- Existing image-regression test file: `test_LiveFT.py`
-- Existing PyInstaller spec: `LiveFT.spec`
-- Existing GitHub Actions build pipeline: `.github/workflows/build.yml`
+- Fast default unit suite: `tests/test_liveft_unit.py`
+- Explicit image-regression suite: `test_LiveFT.py`
+- PyInstaller spec and helper scripts for build, DMG creation, signing, notarization, and verification
+- GitHub Actions build pipeline: `.github/workflows/build.yml`
 - Existing macOS entitlements file: `CodeSigning/entitlements.xml`
-- Existing built macOS app bundle in `binaries/`
+- Experimental prototypes isolated under `experiments/`
 
 ### What I verified locally
 
-- `python -m py_compile LiveFT.py test_LiveFT.py` passes.
-- `pytest` does not currently collect safely with the checked-in `pytest.ini`.
-- Running only `test_LiveFT.py` shows the baseline image tests are partially failing on this machine.
-- The checked-in macOS app bundle is ad-hoc signed, not release signed.
+- `pytest -q` passes with the fast unit suite.
+- `ruff check .`, `pre-commit run --all-files`, and script syntax checks pass.
+- The app lifecycle is explicit and side-effect free at construction time.
+- A local macOS smoke build can produce an unsigned `.app` and `.dmg`.
+- The macOS workflow can optionally sign and notarize when Apple credentials are provided.
 
-### Concrete issues found
+### Remaining concrete issues
 
-1. Test collection is fragile.
-   `pytest.ini` enabled `--doctest-modules`, which caused pytest to import every Python module in the repo. That pulled in an experimental PyQt prototype, which imports `torch` at module import time and aborted collection on this machine.
+1. The slow regression suite is still brittle.
+   `test_LiveFT.py` remains useful as a regression backstop, but it is still not a stable default gate for day-to-day work.
 
-2. The existing test suite is slow and brittle.
-   `test_LiveFT.py` is a PDF-to-image regression suite. It is useful, but it is not a good "small fast suite" because:
-   - it depends on PyMuPDF rendering
-   - it compares generated FFT images against exact-ish baselines
-   - 11 of 19 cases currently fail here due to image diffs
+2. The camera layer is still fairly direct.
+   `cv2.VideoCapture` is no longer created during construction, but there is still no dedicated camera abstraction or mock-friendly wrapper.
 
-3. The app is hard to test because construction has side effects.
-   `LiveFT.__attrs_post_init__()` opens the camera, creates a window, and immediately starts the main loop. That makes unit testing and reuse harder than necessary.
+3. macOS release metadata is still incomplete.
+   The spec now supports bundle identifier, signing identity, entitlements, and camera usage text, but version metadata and a real app icon are still missing.
 
-4. Some flags and docs no longer match the implementation.
-   - `README.md` still needs to match the current app behavior as features evolve.
+4. Cross-platform release polish is still open.
+   Linux and Windows builds already exist in CI, but they are still unsigned and their release packaging can be improved.
 
-5. The release metadata is not ready for public macOS distribution.
-   In `LiveFT.spec`:
-   - `codesign_identity=None`
-   - `entitlements_file=None`
-   - `bundle_identifier=None`
-   - `NSCameraUsageDescription` is placeholder text
-
-6. The current GitHub Actions workflow builds artifacts but does not protect release quality.
-   It packages and publishes, but it does not run tests before release, does not sign, and does not notarize.
-
-7. Repository hygiene can be improved.
-   The repo currently includes built artifacts and local clutter such as `.DS_Store`, plus prototype code under `experiments/` that should not be treated as release targets.
+5. A real signed/notarized macOS release has not been exercised yet.
+   The scripts and workflow are ready, but they still need an end-to-end run with actual Apple credentials.
 
 ## Proposed Upgrade Order
 
 ### Phase 1: Establish a real baseline
 
-- [ ] Fix `pytest` collection so the default test command runs reliably.
-- [ ] Split tests into:
+- [x] Fix `pytest` collection so the default test command runs reliably.
+- [x] Split tests into:
   - a small fast unit suite that runs on every change
   - a slower image-regression suite that can be optional or separately marked
-- [ ] Update README and developer docs so setup, testing, and runtime behavior match the actual code.
+- [x] Update README and developer docs so setup, testing, and runtime behavior match the actual code.
 
 Why first:
 This gives us a safe place to refactor from. Right now the repository can build artifacts without proving the code is healthy.
 
 ### Phase 2: Add the small fast test suite
 
-- [ ] Add unit tests for `FrameProcessor.prepareFrame()`.
+- [x] Add unit tests for `FrameProcessor.prepareFrame()`.
   Cover crop, scale, and grayscale conversion.
-- [ ] Add unit tests for `FrameProcessor.applyWindow()`.
+- [x] Add unit tests for `FrameProcessor.applyWindow()`.
   Cover shape, normalization bounds, and window caching behavior.
-- [ ] Add unit tests for `FrameProcessor.computeFFT()`.
+- [x] Add unit tests for `FrameProcessor.computeFFT()`.
   Cover output shape, normalization, and `killCenterLines`.
-- [ ] Add unit tests for argument parsing.
+- [x] Add unit tests for argument parsing.
   Cover boolean toggles and default values from `parse_args()`.
-- [ ] Mark the PDF/image comparisons as `slow` or `regression`.
+- [x] Mark the PDF/image comparisons as `slow` or `regression`.
 
 Expected result:
 `pytest` should finish quickly for day-to-day work and catch obvious breakage without requiring a camera or PDF rendering.
 
 ### Phase 3: Refactor for testability and clarity
 
-- [ ] Move side-effectful startup out of `LiveFT.__attrs_post_init__()`.
-- [ ] Add a `main()` entry point that wires together:
+- [x] Move side-effectful startup out of `LiveFT.__attrs_post_init__()`.
+- [x] Add a `main()` entry point that wires together:
   - argument parsing
   - camera/window initialization
   - run loop
-- [ ] Keep `FrameProcessor` pure and easy to test.
+- [x] Keep `FrameProcessor` pure and easy to test.
 - [ ] Introduce a small camera abstraction or wrapper for `cv2.VideoCapture`.
-- [ ] Add guards against divide-by-zero in normalization paths.
+- [x] Add guards against divide-by-zero in normalization paths.
 
 Expected result:
 Cleaner code boundaries, easier tests, fewer hidden side effects.
 
 ### Phase 4: User-facing feature improvements
 
-- [ ] Add a frame-rate limiter so processing can be capped at 25 FPS instead of always chasing camera speed.
-- [ ] Expose the frame-rate limiter as configuration.
+- [x] Add a frame-rate limiter so processing can be capped at 25 FPS instead of always chasing camera speed.
+- [x] Expose the frame-rate limiter as configuration.
   Prefer at least a command-line option, with runtime control if the UX stays simple.
-- [ ] Add an optional radial distribution plot derived from the FFT center and render it underneath the source and FFT images.
-- [ ] Add interactive gamma control for the FFT display with the `+` and `-` keys.
-- [ ] Add tests for the new display-state logic where practical, especially gamma adjustment and frame-rate limit configuration.
+- [x] Add an optional radial distribution plot derived from the FFT center and render it underneath the source and FFT images.
+- [x] Add interactive gamma control for the FFT display with the `+` and `-` keys.
+- [x] Add tests for the new display-state logic where practical, especially gamma adjustment and frame-rate limit configuration.
 
 Expected result:
 The app becomes more usable during demos and lectures, and the FFT visualization becomes easier to tune live.
@@ -138,6 +127,8 @@ A cleaner repo and fewer accidental release or collection problems.
   - [x] non-placeholder camera permission text
   - [x] signing identity and entitlements wiring
 - [x] Replace the current `sed`-based spec mutation in CI with a dedicated build script.
+- [x] Add reusable macOS signing, notarization, verification, and release scripts.
+- [x] Wire optional macOS signing and notarization secrets into the GitHub Actions workflow.
 - [ ] Build a signed `.app`.
 - [ ] Notarize the app or the DMG.
 - [ ] Staple notarization tickets.
@@ -145,6 +136,20 @@ A cleaner repo and fewer accidental release or collection problems.
 
 Expected result:
 A distributable macOS artifact that Gatekeeper accepts on another machine.
+
+### Phase 7: Cross-platform release polish
+
+- [x] Build Linux and Windows artifacts in CI.
+- [ ] Decide on the preferred Linux release format.
+  Candidates: raw binary, `.tar.gz`, or AppImage.
+- [ ] Decide on the preferred Windows release format.
+  Candidates: raw `.exe` or zipped release bundle.
+- [ ] Add post-build packaging so Linux and Windows release assets are easier to download and use.
+- [ ] Decide whether Windows signing is worth doing now or can wait.
+  Unsigned Windows binaries are acceptable for internal/testing use, but SmartScreen warnings are expected.
+
+Expected result:
+Cleaner Linux and Windows release assets without blocking on a Windows signing certificate.
 
 ## Recommended First Deliverables
 
@@ -189,10 +194,10 @@ To release on macOS, we need:
 
 ### Release prerequisites
 
-- [ ] Choose bundle identifier
+- [x] Choose bundle identifier
 - [ ] Create app icon (`.icns`) if needed
-- [ ] Replace placeholder camera usage string
-- [ ] Confirm entitlements are minimal and correct
+- [x] Replace placeholder camera usage string
+- [x] Confirm entitlements are minimal and correct
 - [ ] Decide whether signing/notarization will happen:
   - only locally on a trusted Mac, or
   - in GitHub Actions with secrets
@@ -227,16 +232,15 @@ Those scripts should avoid editing `LiveFT.spec` in place and should take versio
 
 ## Immediate Risks To Address
 
-- The current release workflow can publish artifacts without running tests first.
-- The default pytest configuration is not safe.
-- The current regression suite is not stable enough to be the only test layer.
-- The macOS app metadata and signing configuration are not release-ready.
+- The slow regression suite is still not stable enough to become the default gate.
+- The macOS app still needs real icon/version metadata before it is release-finished.
+- The macOS workflow still needs one real signed/notarized run with Apple credentials.
+- Linux and Windows release assets are functional, but not yet polished or signed.
 
 ## Proposed Working Sequence
 
-1. Fix pytest collection and add the small fast unit suite.
-2. Refactor startup and separate pure logic from UI/camera side effects.
-3. Implement the user-facing visualization controls and the optional radial distribution panel.
-4. Clean up repo structure and packaging inputs.
-5. Implement the macOS build/sign/notarize flow.
-6. Re-enable or tighten CI gates so releases only happen from green builds.
+1. Finish macOS release metadata by adding version info and a real app icon.
+2. Run one real signed/notarized macOS build through the workflow with Apple credentials.
+3. Improve Linux and Windows release packaging in CI.
+4. Decide whether Windows signing should be postponed or added later.
+5. Return to remaining code-level cleanup, especially the camera abstraction and regression-suite stability.
