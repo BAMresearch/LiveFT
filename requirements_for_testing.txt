@@ -1,4 +1,6 @@
-# additional requirements for testing
+# additional requirements for testing and dev tooling
 pytest
 pymupdf
 Pillow
+ruff
+pre-commit

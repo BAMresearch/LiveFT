@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import pytest
 
-from LiveFT import FrameProcessor, LiveFT, parse_args
+from LiveFT import FrameProcessor, LiveFT, limitFPS, parse_args
 
 
 def reference_fft(frame: np.ndarray, kill_center_lines: bool = False) -> np.ndarray:
@@ -14,8 +14,8 @@ def reference_fft(frame: np.ndarray, kill_center_lines: bool = False) -> np.ndar
 
     if kill_center_lines:
         h, w = fft_log.shape[:2]
-        fft_log[h // 2 - 1:h // 2 + 1, :] = fft_log[h // 2 + 1:h // 2 + 3, :]
-        fft_log[:, w // 2 - 1:w // 2 + 1] = fft_log[:, w // 2 + 1:w // 2 + 3]
+        fft_log[h // 2 - 1 : h // 2 + 1, :] = fft_log[h // 2 + 1 : h // 2 + 3, :]
+        fft_log[:, w // 2 - 1 : w // 2 + 1] = fft_log[:, w // 2 + 1 : w // 2 + 3]
 
     max_value = fft_log.max()
     if not np.isfinite(max_value) or max_value <= 0:
@@ -95,6 +95,37 @@ def test_compute_fft_handles_flat_signal_after_center_line_removal() -> None:
     np.testing.assert_array_equal(fft, np.zeros((8, 8), dtype=np.float32))
 
 
+def test_limit_fps_sleeps_until_the_next_frame_budget() -> None:
+    current_time = {"value": 1.0}
+    sleep_calls = []
+
+    def fake_time() -> float:
+        return current_time["value"]
+
+    def fake_sleep(duration: float) -> None:
+        sleep_calls.append(duration)
+        current_time["value"] += duration
+
+    next_frame_time = limitFPS(1.04, 25.0, time_fn=fake_time, sleep_fn=fake_sleep)
+
+    assert sleep_calls == [pytest.approx(0.04)]
+    assert next_frame_time == pytest.approx(1.08)
+
+
+def test_limit_fps_does_not_sleep_when_disabled_or_running_late() -> None:
+    sleep_calls = []
+
+    def fake_sleep(duration: float) -> None:
+        sleep_calls.append(duration)
+
+    no_limit_next_frame = limitFPS(5.0, 0.0, time_fn=lambda: 2.0, sleep_fn=fake_sleep)
+    late_next_frame = limitFPS(1.0, 25.0, time_fn=lambda: 1.2, sleep_fn=fake_sleep)
+
+    assert sleep_calls == []
+    assert no_limit_next_frame == pytest.approx(2.0)
+    assert late_next_frame == pytest.approx(1.2)
+
+
 def test_parse_args_uses_liveft_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "argv", ["liveft"])
 
@@ -106,10 +137,11 @@ def test_parse_args_uses_liveft_defaults(monkeypatch: pytest.MonkeyPatch) -> Non
     assert args.killCenterLines is False
     assert args.showInfo is False
     assert args.noGPU is True
+    assert args.maxFPS == pytest.approx(0.0)
 
 
 def test_parse_args_toggles_boolean_flags(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["liveft", "-k", "-i", "-p", "-g"])
+    monkeypatch.setattr(sys, "argv", ["liveft", "-k", "-i", "-p", "-g", "-m", "25"])
 
     args = parse_args(LiveFT)
 
@@ -117,3 +149,4 @@ def test_parse_args_toggles_boolean_flags(monkeypatch: pytest.MonkeyPatch) -> No
     assert args.showInfo is True
     assert args.downScale is True
     assert args.noGPU is False
+    assert args.maxFPS == pytest.approx(25.0)

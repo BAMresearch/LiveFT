@@ -1,16 +1,18 @@
-import pymupdf
+from pathlib import Path
+
 import cv2
 import numpy as np
-from pathlib import Path
+import pymupdf
 import pytest
 
 from LiveFT import FrameProcessor
 
 pytestmark = [pytest.mark.regression, pytest.mark.slow]
 
-inputDir  = "images"
+inputDir = "images"
 outputDir = "testdata"
 subdirs = ("singleObjects", "arrays")
+
 
 def pixmapToCV(pix):
     # Get the width and height of the pixmap
@@ -31,6 +33,7 @@ def pixmapToCV(pix):
 
     return img_array
 
+
 def pdfToCV(pdf_path, page_number=0):
     print(f"Reading '{pdf_path}'")
     # Open the PDF file
@@ -44,14 +47,16 @@ def pdfToCV(pdf_path, page_number=0):
 
     return cv2_image  # Return the OpenCV frame
 
+
 def showArray(frame, title=""):
     cv2.imshow(title, frame)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
+
 def examplePDFs():
-    return [fn for sub in subdirs for fn in (Path(inputDir)/Path(sub)).iterdir()
-            if fn.suffix.lower() == ".pdf"]
+    return [fn for sub in subdirs for fn in (Path(inputDir) / Path(sub)).iterdir() if fn.suffix.lower() == ".pdf"]
+
 
 def writeFTImage(dest_path, src_image):
     if not dest_path.parent.is_dir():
@@ -59,10 +64,12 @@ def writeFTImage(dest_path, src_image):
     cv2.imwrite(dest_path, src_image)
     print(f"Wrote '{dest_path}'")
 
+
 def readFTImage(src_path):
     assert src_path.is_file()
     img = cv2.imread(src_path, cv2.IMREAD_GRAYSCALE)
     return img
+
 
 def pytest_generate_tests(metafunc):
     src_paths = examplePDFs()
@@ -71,17 +78,15 @@ def pytest_generate_tests(metafunc):
     if "src_path" in metafunc.fixturenames and "fft_path" in metafunc.fixturenames:
         metafunc.parametrize(("src_path", "fft_path"), zip(src_paths, fft_paths))
 
+
 def testFT(src_path, fft_path, showImages=False, writeImages=False):
     print(f"{src_path=} {fft_path=}")
     frame_in = pdfToCV(src_path)
     assert frame_in is not None
     if showImages:
         showArray(frame_in, f"Extracted Image {src_path}")
-    #frame_prepared = LiveFT._process_image(frame_in.astype(np.float32), h_crop=None, v_crop=None, h_scale=1, v_scale=1, device=None)
     fp = FrameProcessor()
-    frame_prepared, fft_image = fp(frame_in.astype(np.float32))
-    # output is numpy array
-    #fft_image = LiveFT._compute_fft(frame_prepared, False)
+    _, fft_image = fp(frame_in.astype(np.float32))
     assert fft_image is not None
     fft_image = (fft_image * 255).astype(np.uint8)
     # print(f"{type(fft_image)=}")
@@ -93,14 +98,17 @@ def testFT(src_path, fft_path, showImages=False, writeImages=False):
     fft_expected = readFTImage(fft_path)
     assert fft_expected.dtype == fft_image.dtype
     assert fft_expected.shape == fft_image.shape
+
     def printRange(arr, title, *args):
         print(f"{title} range: [{arr.min():.12e}, {arr.max():.12e}], mean: {arr.mean()}", *args)
+
     printRange(fft_expected, "fft_expected")
     printRange(fft_image, "fft_image")
     fft_diff = np.abs(fft_expected.astype(np.float32) - fft_image.astype(np.float32))
-    printRange(fft_diff, "fft_diff", fft_diff.max() <= 1., fft_diff.mean() < 1e-3)
+    printRange(fft_diff, "fft_diff", fft_diff.max() <= 1.0, fft_diff.mean() < 1e-3)
     # float comparison of 2d FT arrays, there as assumed to be equivalent in case:
-    assert fft_diff.max() <= 1. and fft_diff.mean() < 1e-3
+    assert fft_diff.max() <= 1.0 and fft_diff.mean() < 1e-3
+
 
 if __name__ == "__main__":
     # calc the fft for every image in each path given above
