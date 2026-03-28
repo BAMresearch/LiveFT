@@ -31,7 +31,7 @@ This plan focuses on:
 ### Concrete issues found
 
 1. Test collection is fragile.
-   `pytest.ini` enables `--doctest-modules`, which causes pytest to import every Python module in the repo. That pulls in `LiveFT2.py`, which imports `torch` at module import time and aborts collection on this machine.
+   `pytest.ini` enabled `--doctest-modules`, which caused pytest to import every Python module in the repo. That pulled in an experimental PyQt prototype, which imports `torch` at module import time and aborted collection on this machine.
 
 2. The existing test suite is slow and brittle.
    `test_LiveFT.py` is a PDF-to-image regression suite. It is useful, but it is not a good "small fast suite" because:
@@ -56,7 +56,7 @@ This plan focuses on:
    It packages and publishes, but it does not run tests before release, does not sign, and does not notarize.
 
 7. Repository hygiene can be improved.
-   The repo currently includes built artifacts and local clutter such as `.DS_Store`, plus test-project prototype files (`LiveFT2.py`, `LiveFT_PyQt.py`) that should not be treated as release targets.
+   The repo currently includes built artifacts and local clutter such as `.DS_Store`, plus prototype code under `experiments/` that should not be treated as release targets.
 
 ## Proposed Upgrade Order
 
@@ -114,8 +114,8 @@ The app becomes more usable during demos and lectures, and the FFT visualization
 
 ### Phase 5: Packaging and repo cleanup
 
-- [ ] Treat `LiveFT2.py` and `LiveFT_PyQt.py` as test projects rather than supported app entry points.
-- [ ] Move those test projects under an `experiments/` or `scratch/` directory, or otherwise exclude them from default test/discovery paths.
+- [ ] Keep the PyQt prototypes under `experiments/` and out of the supported app entry points.
+- [ ] Exclude `experiments/` from the default test/discovery/lint path unless work is explicitly happening there.
 - [ ] Stop checking built app bundles into the main source tree.
 - [ ] Extend `.gitignore` for:
   - `binaries/`

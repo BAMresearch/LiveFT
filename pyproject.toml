@@ -3,8 +3,7 @@ line-length = 120
 target-version = "py312"
 extend-exclude = [
     "binaries",
-    "LiveFT2.py",
-    "LiveFT_PyQt.py",
+    "experiments",
 ]
 
 [tool.ruff.format]
