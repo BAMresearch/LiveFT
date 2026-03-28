@@ -40,4 +40,4 @@ fi
 
 cd "${REPO_ROOT}"
 mkdir -p "${PYINSTALLER_CONFIG_DIR}"
-"${PYTHON_BIN}" -m PyInstaller --clean LiveFT.spec
+"${PYTHON_BIN}" -m PyInstaller --clean -y LiveFT.spec

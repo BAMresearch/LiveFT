@@ -24,6 +24,10 @@ app_name="${app_dir%.app}"
 
 hdiutil create -ov -format UDZO -fs HFS+ -srcfolder "${app_dir}" -volname "${app_name}" "${app_name}.dmg"
 
+if [ -d "${app_name}" ]; then
+  rm -rf "${app_name}"
+fi
+
 if [ "${KEEP_APP_AFTER_DMG}" != "1" ]; then
   rm -rf "${app_dir}"
 fi

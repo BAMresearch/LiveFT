@@ -218,9 +218,10 @@ xcrun stapler validate dist/LiveFT.dmg
 ### Suggested automation targets
 
 - [ ] `scripts/build_macos.sh`
-- [ ] `scripts/sign_macos.sh`
-- [ ] `scripts/notarize_macos.sh`
-- [ ] `scripts/release_macos.sh`
+- [x] `scripts/sign_macos.sh`
+- [x] `scripts/notarize_macos.sh`
+- [x] `scripts/release_macos.sh`
+- [x] `scripts/verify_macos.sh`
 
 Those scripts should avoid editing `LiveFT.spec` in place and should take version, signing identity, bundle ID, and output paths through environment variables or CLI args.
 

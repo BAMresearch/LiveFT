@@ -51,6 +51,24 @@ sh scripts/create_dmg.sh dist
 
 Set `LIVEFT_KEEP_APP_AFTER_DMG=1` if you want to keep the `.app` bundle in `dist/` after the DMG is created.
 
+For a local macOS release build:
+```bash
+LIVEFT_CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" sh scripts/release_macos.sh
+```
+
+Additional macOS release scripts:
+- `sh scripts/sign_macos.sh dist`
+- `sh scripts/notarize_macos.sh dist`
+- `sh scripts/verify_macos.sh dist`
+
+The GitHub workflow uses these optional secrets for signed/notarized macOS releases:
+- `MACOS_CODESIGN_IDENTITY`
+- `MACOS_CERTIFICATE_P12_BASE64`
+- `MACOS_CERTIFICATE_PASSWORD`
+- `MACOS_NOTARY_KEY_ID`
+- `MACOS_NOTARY_ISSUER`
+- `MACOS_NOTARY_KEY_P8`
+
 ## Options
 - `-n, --numShots`: Maximum number of images before program exits.
 - `-d, --camDevice`: Camera device ID to use.

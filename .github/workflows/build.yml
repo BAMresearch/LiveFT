@@ -73,7 +73,78 @@ jobs:
             with open(os.environ["GITHUB_OUTPUT"], "a") as fd:
                 fd.write(f"res={platform.system()}-{machine}\n")
 
+      - name: Validate macOS release secrets
+        if: startsWith(matrix.os, 'macos')
+        env:
+          MACOS_CODESIGN_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER: ${{ secrets.MACOS_NOTARY_ISSUER }}
+          MACOS_NOTARY_KEY_P8: ${{ secrets.MACOS_NOTARY_KEY_P8 }}
+        shell: sh
+        run: |
+          signing_count=0
+          [ -n "$MACOS_CODESIGN_IDENTITY" ] && signing_count=$((signing_count + 1))
+          [ -n "$MACOS_CERTIFICATE_P12_BASE64" ] && signing_count=$((signing_count + 1))
+          [ -n "$MACOS_CERTIFICATE_PASSWORD" ] && signing_count=$((signing_count + 1))
+          if [ "$signing_count" -ne 0 ] && [ "$signing_count" -ne 3 ]; then
+            echo "Configure all macOS signing secrets or none of them." >&2
+            exit 1
+          fi
+
+          notary_count=0
+          [ -n "$MACOS_NOTARY_KEY_ID" ] && notary_count=$((notary_count + 1))
+          [ -n "$MACOS_NOTARY_ISSUER" ] && notary_count=$((notary_count + 1))
+          [ -n "$MACOS_NOTARY_KEY_P8" ] && notary_count=$((notary_count + 1))
+          if [ "$notary_count" -ne 0 ] && [ "$notary_count" -ne 3 ]; then
+            echo "Configure all macOS notary secrets or none of them." >&2
+            exit 1
+          fi
+
+          if [ "$notary_count" -ne 0 ] && [ "$signing_count" -ne 3 ]; then
+            echo "Notarization requires the macOS signing secrets to be configured too." >&2
+            exit 1
+          fi
+
+      - name: Import macOS signing certificate
+        if: startsWith(matrix.os, 'macos') && secrets.MACOS_CODESIGN_IDENTITY != '' && secrets.MACOS_CERTIFICATE_P12_BASE64 != '' && secrets.MACOS_CERTIFICATE_PASSWORD != ''
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        shell: sh
+        run: |
+          CERT_PATH="$RUNNER_TEMP/liveft-signing.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/liveft-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)$(uuidgen)"
+          export CERT_PATH
+          python -c 'import base64, os; from pathlib import Path; Path(os.environ["CERT_PATH"]).write_bytes(base64.b64decode(os.environ["MACOS_CERTIFICATE_P12_BASE64"]))'
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Write macOS notary API key
+        if: startsWith(matrix.os, 'macos') && secrets.MACOS_NOTARY_KEY_ID != '' && secrets.MACOS_NOTARY_ISSUER != '' && secrets.MACOS_NOTARY_KEY_P8 != ''
+        env:
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER: ${{ secrets.MACOS_NOTARY_ISSUER }}
+          MACOS_NOTARY_KEY_P8: ${{ secrets.MACOS_NOTARY_KEY_P8 }}
+        shell: sh
+        run: |
+          NOTARY_KEY_PATH="$RUNNER_TEMP/AuthKey_${MACOS_NOTARY_KEY_ID}.p8"
+          umask 077
+          printf '%s' "$MACOS_NOTARY_KEY_P8" > "$NOTARY_KEY_PATH"
+          {
+            echo "LIVEFT_NOTARY_KEY_FILE=$NOTARY_KEY_PATH"
+            echo "LIVEFT_NOTARY_KEY_ID=$MACOS_NOTARY_KEY_ID"
+            echo "LIVEFT_NOTARY_ISSUER=$MACOS_NOTARY_ISSUER"
+          } >> "$GITHUB_ENV"
+
       - name: Build
+        if: ${{ !startsWith(matrix.os, 'macos') }}
         env:
           VERSION: ${{ needs.version.outputs.version }}
         shell: sh
@@ -81,17 +152,30 @@ jobs:
           OS=${{ steps.os.outputs.res }}
           sh scripts/build_dist.sh "$VERSION" "$OS"
 
-      - name: Create DMG
+      - name: Build / Sign / Notarize macOS Release
         if: startsWith(matrix.os, 'macos')
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          LIVEFT_CODESIGN_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
+          LIVEFT_NOTARY_KEY_FILE: ${{ env.LIVEFT_NOTARY_KEY_FILE }}
+          LIVEFT_NOTARY_KEY_ID: ${{ env.LIVEFT_NOTARY_KEY_ID }}
+          LIVEFT_NOTARY_ISSUER: ${{ env.LIVEFT_NOTARY_ISSUER }}
+          LIVEFT_KEEP_APP_AFTER_DMG: '1'
         shell: sh
         run: |
+          OS=${{ steps.os.outputs.res }}
           if [ "${{ matrix.os }}" = "macos-13" ]; then
             # workaround 'hdiutil: create failed - Resource busy'
             # https://github.com/actions/runner-images/issues/7522#issuecomment-1556766641
             sudo pkill -9 XProtect >/dev/null || true;
             while pgrep XProtect; do sleep 3; done;
           fi
-          sh scripts/create_dmg.sh dist
+          sh scripts/release_macos.sh "$VERSION" "$OS"
+
+      - name: Remove temporary macOS keychain
+        if: always() && startsWith(matrix.os, 'macos') && secrets.MACOS_CODESIGN_IDENTITY != '' && secrets.MACOS_CERTIFICATE_P12_BASE64 != '' && secrets.MACOS_CERTIFICATE_PASSWORD != ''
+        shell: sh
+        run: security delete-keychain "$RUNNER_TEMP/liveft-signing.keychain-db" || true
 
       - name: Check what was created
         shell: sh
