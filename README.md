@@ -18,6 +18,7 @@ uvx --python 3.14 --from git+https://github.com/BAMresearch/LiveFT.git liveft
 ```
 
 LiveFT supports Python 3.12 and newer; Python 3.14 is preferred. Change `--python 3.14` if you need another supported version.
+The GitHub command installs the latest pushed revision, so uncommitted local changes are not included.
 
 Press "q" to exit the application.
 
@@ -34,7 +35,14 @@ uv tool install --python 3.14 git+https://github.com/BAMresearch/LiveFT.git
 liveft
 ```
 
-Alternatively, install LiveFT from a local checkout with pip:
+From a local checkout, install the current working tree with uv:
+
+```bash
+uv tool install --python 3.14 .
+liveft
+```
+
+Alternatively, install the current working tree with pip:
 
 ```bash
 python -m pip install .
