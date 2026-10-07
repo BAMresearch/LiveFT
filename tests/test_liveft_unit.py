@@ -11,10 +11,12 @@ from LiveFT import (
     adjustGammaValue,
     applyGamma,
     computeRadialProfile,
+    drawTextLine,
     getRadialProfileBins,
     limitFPS,
     parse_args,
     renderRadialProfile,
+    toDisplayImage,
 )
 
 
@@ -136,9 +138,24 @@ def test_render_radial_profile_returns_nonempty_panel() -> None:
     panel = renderRadialProfile(profile, width=64, height=32)
 
     assert panel.shape == (32, 64)
-    assert panel.dtype == np.float32
-    assert np.isfinite(panel).all()
-    assert panel.max() == pytest.approx(1.0)
+    assert panel.dtype == np.uint8
+    assert panel.max() == 255
+
+
+def test_to_display_image_clips_scales_and_converts_to_uint8() -> None:
+    image = np.array([[-1.0, 0.0, 0.5, 1.0, 2.0]], dtype=np.float32)
+
+    display = toDisplayImage(image)
+
+    np.testing.assert_array_equal(display, np.array([[0, 0, 128, 255, 255]], dtype=np.uint8))
+
+
+def test_draw_text_line_supports_display_images() -> None:
+    display = np.zeros((100, 300), dtype=np.uint8)
+
+    drawTextLine(display, 0, "LiveFT")
+
+    assert display.max() == 255
 
 
 def test_apply_gamma_darkens_midtones_for_gamma_above_one() -> None:
@@ -220,6 +237,22 @@ def test_liveft_constructor_is_side_effect_free() -> None:
     assert liveft.frameTime is None
     assert liveft.windowInitialized is False
     assert liveft.lastDisplayShape is None
+
+
+def test_compose_frame_returns_uint8_display_image() -> None:
+    class FakeVideoCapture:
+        def read(self) -> tuple[bool, np.ndarray]:
+            frame = np.arange(8 * 8 * 3, dtype=np.uint8).reshape(8, 8, 3)
+            return True, frame
+
+    liveft = LiveFT(numShots=1, rows=8, columns=8, hScale=1.0, vScale=1.0)
+    liveft.vc = FakeVideoCapture()
+    liveft.frameTime = np.zeros(liveft.frameTimeCount, dtype=np.float64)
+
+    display = liveft.composeFrame(0, {})
+
+    assert display.shape == (8, 16)
+    assert display.dtype == np.uint8
 
 
 def test_liveft_setup_and_close_manage_resources(monkeypatch: pytest.MonkeyPatch) -> None:

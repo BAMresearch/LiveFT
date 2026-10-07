@@ -133,13 +133,19 @@ def applyGamma(image: np.ndarray, gamma: float) -> np.ndarray:
     return np.power(clipped, gamma).astype(np.float32, copy=False)
 
 
+def toDisplayImage(image: np.ndarray) -> np.ndarray:
+    """Convert a normalized processing image to an 8-bit display image."""
+    clipped = np.clip(image, 0.0, 1.0)
+    return np.rint(clipped * 255.0).astype(np.uint8)
+
+
 def adjustGammaValue(current_gamma: float, delta: float) -> float:
     adjusted = current_gamma + delta
     return float(np.clip(adjusted, MIN_FFT_GAMMA, MAX_FFT_GAMMA))
 
 
 def renderRadialProfile(profile: np.ndarray, width: int, height: int = 160) -> np.ndarray:
-    panel = np.zeros((height, width), dtype=np.float32)
+    panel = np.zeros((height, width), dtype=np.uint8)
     if width <= 0 or height <= 0:
         return panel
 
@@ -151,9 +157,9 @@ def renderRadialProfile(profile: np.ndarray, width: int, height: int = 160) -> n
     x_axis_end = max(left_margin, width - right_margin - 1)
     plot_height = max(1, x_axis_y - top_margin)
 
-    cv2.line(panel, (left_margin, top_margin), (left_margin, x_axis_y), 0.35, 1)
-    cv2.line(panel, (left_margin, x_axis_y), (x_axis_end, x_axis_y), 0.35, 1)
-    cv2.putText(panel, "Radial FFT", (left_margin, 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 0.8, 1)
+    cv2.line(panel, (left_margin, top_margin), (left_margin, x_axis_y), 89, 1)
+    cv2.line(panel, (left_margin, x_axis_y), (x_axis_end, x_axis_y), 89, 1)
+    cv2.putText(panel, "Radial FFT", (left_margin, 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 204, 1)
 
     if profile.size == 0:
         return panel
@@ -163,7 +169,7 @@ def renderRadialProfile(profile: np.ndarray, width: int, height: int = 160) -> n
     y_positions = x_axis_y - np.rint(profile_scaled * plot_height).astype(np.int32)
 
     if profile.size == 1:
-        cv2.circle(panel, (int(x_positions[0]), int(y_positions[0])), 1, 1.0, -1)
+        cv2.circle(panel, (int(x_positions[0]), int(y_positions[0])), 1, 255, -1)
         return panel
 
     for start_x, start_y, end_x, end_y in zip(
@@ -172,12 +178,12 @@ def renderRadialProfile(profile: np.ndarray, width: int, height: int = 160) -> n
         x_positions[1:],
         y_positions[1:],
     ):
-        cv2.line(panel, (int(start_x), int(start_y)), (int(end_x), int(end_y)), 1.0, 1)
+        cv2.line(panel, (int(start_x), int(start_y)), (int(end_x), int(end_y)), 255, 1)
 
     return panel
 
 
-def drawTextLine(frame: cv2.UMat, line_idx: int, text: str) -> None:
+def drawTextLine(frame: np.ndarray, line_idx: int, text: str) -> None:
     posx, posy = 50, 50  # origin image coordinates
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 0.7
@@ -515,8 +521,8 @@ class LiveFT:
         frame, fft = self.frameProc(frame)
         fft_display = applyGamma(fft, self.fftGamma)
 
-        # normalize and convert to numpy array
-        framesCombined = np.concatenate((frame, fft_display), axis=1)
+        # Keep processing in floating point, then convert once at the display boundary.
+        framesCombined = toDisplayImage(np.concatenate((frame, fft_display), axis=1))
         if self.showRadialProfile:
             profile = computeRadialProfile(fft)
             radial_height = max(120, frame.shape[0] // 3)

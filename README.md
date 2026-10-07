@@ -9,22 +9,39 @@ if the lecturer shows printouts of the library of shapes and arrays in front of 
 <img width="806" alt="image" src="https://github.com/user-attachments/assets/1a6b2f9b-a5c9-4ac3-900e-31de1161e004">
 
 
+## Quick start
+
+With [uv](https://docs.astral.sh/uv/getting-started/installation/) installed, launch the latest LiveFT directly from GitHub in one command:
+
+```bash
+uvx --python 3.14 --from git+https://github.com/BAMresearch/LiveFT.git liveft
+```
+
+LiveFT supports Python 3.12 and newer; Python 3.14 is preferred. Change `--python 3.14` if you need another supported version.
+
+Press "q" to exit the application.
+
 ## Prerequisites
-Ensure you have Python 3.12 or above installed.
+
+For the manual installation below, ensure you have Python 3.12 or newer installed.
 
 ## Installation
-Install dependencies with:
+
+Install LiveFT as a persistent uv-managed command:
+
 ```bash
-pip install -r requirements.txt
+uv tool install --python 3.14 git+https://github.com/BAMresearch/LiveFT.git
+liveft
 ```
 
-## Usage
-Run the program with:
+Alternatively, install LiveFT from a local checkout with pip:
+
 ```bash
-python LiveFT.py
+python -m pip install .
+liveft
 ```
 
-Press "q" to exit the application
+Press "q" to exit the application.
 
 ## Packaging
 Build a distributable bundle with:

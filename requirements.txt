@@ -1,4 +1,3 @@
 numpy
-opencv-python
-argparse
+opencv-python>=4,<6
 attrs
