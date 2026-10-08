@@ -74,6 +74,7 @@ jobs:
                 fd.write(f"res={platform.system()}-{machine}\n")
 
       - name: Validate macOS release secrets
+        id: release_secrets
         if: startsWith(matrix.os, 'macos')
         env:
           MACOS_CODESIGN_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
@@ -107,8 +108,20 @@ jobs:
             exit 1
           fi
 
+          if [ "$signing_count" -eq 3 ]; then
+            echo "signing_configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signing_configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ "$notary_count" -eq 3 ]; then
+            echo "notary_configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "notary_configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Import macOS signing certificate
-        if: startsWith(matrix.os, 'macos') && secrets.MACOS_CODESIGN_IDENTITY != '' && secrets.MACOS_CERTIFICATE_P12_BASE64 != '' && secrets.MACOS_CERTIFICATE_PASSWORD != ''
+        if: startsWith(matrix.os, 'macos') && steps.release_secrets.outputs.signing_configured == 'true'
         env:
           MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
@@ -127,7 +140,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
       - name: Write macOS notary API key
-        if: startsWith(matrix.os, 'macos') && secrets.MACOS_NOTARY_KEY_ID != '' && secrets.MACOS_NOTARY_ISSUER != '' && secrets.MACOS_NOTARY_KEY_P8 != ''
+        if: startsWith(matrix.os, 'macos') && steps.release_secrets.outputs.notary_configured == 'true'
         env:
           MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
           MACOS_NOTARY_ISSUER: ${{ secrets.MACOS_NOTARY_ISSUER }}
@@ -173,7 +186,7 @@ jobs:
           sh scripts/release_macos.sh "$VERSION" "$OS"
 
       - name: Remove temporary macOS keychain
-        if: always() && startsWith(matrix.os, 'macos') && secrets.MACOS_CODESIGN_IDENTITY != '' && secrets.MACOS_CERTIFICATE_P12_BASE64 != '' && secrets.MACOS_CERTIFICATE_PASSWORD != ''
+        if: always() && startsWith(matrix.os, 'macos') && steps.release_secrets.outputs.signing_configured == 'true'
         shell: sh
         run: security delete-keychain "$RUNNER_TEMP/liveft-signing.keychain-db" || true
 
