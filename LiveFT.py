@@ -284,7 +284,7 @@ class LiveFT:
     hScale: float = field(default=1.2, metadata={"help": "Horizontal video scale", "short": "x"})
     killCenterLines: bool = field(default=False, metadata={"help": "Remove central lines from FFT image", "short": "k"})
     figid: str = field(
-        default="liveFFT by Brian R. Pauw - press 'h' for help, 'q' to exit.",
+        default="liveFT by Brian R. Pauw - press 'h' for help, 'q' to exit.",
         metadata={"help": "Image window name", "short": "f"},
     )
     rows: int = field(default=500, metadata={"help": "Use center N rows of video", "short": "r"})
