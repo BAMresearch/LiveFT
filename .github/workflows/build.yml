@@ -16,7 +16,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checking out the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Figure out version string
         id: version
@@ -43,11 +43,11 @@ jobs:
     steps:
 
       - name: Checking out the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # see *py_ver* in ci/update.py
       - name: Setting up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: pip
@@ -195,7 +195,7 @@ jobs:
         run: ls -la dist
 
       - name: Store built packages for publishing later
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: package-${{ matrix.os }}
           path: dist/*
@@ -208,7 +208,7 @@ jobs:
     steps:
 
       - name: Download previuously built package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: package-*
           merge-multiple: true
@@ -222,7 +222,7 @@ jobs:
 
       - name: Release
         #if: false # disable for debugging, avoid publishing incomplete releases
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           make_latest: true
           draft: false
