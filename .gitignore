@@ -144,6 +144,9 @@ venv.bak/
 # mkdocs documentation
 /site
 
+# Reproducible manuscript render output (configuration is versioned)
+manuscript/generated/
+
 # mypy
 .mypy_cache/
 .dmypy.json

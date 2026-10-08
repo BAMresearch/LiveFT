@@ -148,5 +148,21 @@ sh scripts/release_macos.sh
 - This program uses OpenCV and NumPy for FFT calculations.
 - Tested on MacOS and Linux environments.
 
+## Manuscript figures
+
+The optional `liveft-figure` command generates paired real-space and
+Fourier-space panels directly from the demonstration PDFs, using the same
+processing code as the live application. Install and run the reproducible
+four-pattern prototype with:
+
+```bash
+uv sync --extra manuscript
+uv run --extra manuscript liveft-figure --config manuscript/prototype.json
+```
+
+See [manuscript/README.md](manuscript/README.md) for configuration, scientific
+interpretation, direct CLI examples, and the exact method represented by the
+prototype.
+
 ## License
 This project is licensed under the Apache-2.0 license.

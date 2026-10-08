@@ -24,7 +24,6 @@ License: Apache-2.0
 """
 
 import argparse
-import math
 import sys
 import time
 from functools import lru_cache
@@ -34,8 +33,13 @@ import cv2
 import numpy as np
 from attrs import define, field, fields, validators
 
-# Vectorize the math.erf function
-erf_vectorized = np.vectorize(math.erf)
+from liveft_processing import (
+    apply_gamma,
+    compute_fourier_spectrum,
+    error_function_window,
+    normalize_unit,
+    spectrum_for_display,
+)
 
 # typical video resolutions (from Ingos webcam), extend if needed, must be sorted
 # used to find one which just covers the given columns&rows area
@@ -70,10 +74,7 @@ FFT_GAMMA_STEP = 0.1
 
 
 def normalizeUnit(frame: np.ndarray) -> np.ndarray:
-    max_value = frame.max()
-    if not np.isfinite(max_value) or max_value <= 0:
-        return np.zeros_like(frame, dtype=np.float32)
-    return frame / max_value
+    return normalize_unit(frame)
 
 
 def limitFPS(
@@ -124,13 +125,7 @@ def computeRadialProfile(image: np.ndarray) -> np.ndarray:
 
 
 def applyGamma(image: np.ndarray, gamma: float) -> np.ndarray:
-    if gamma <= 0:
-        raise ValueError("Gamma must be greater than zero.")
-
-    clipped = np.clip(image, 0.0, 1.0).astype(np.float32, copy=False)
-    if gamma == 1.0:
-        return clipped
-    return np.power(clipped, gamma).astype(np.float32, copy=False)
+    return apply_gamma(image, gamma)
 
 
 def toDisplayImage(image: np.ndarray) -> np.ndarray:
@@ -206,14 +201,7 @@ class FrameProcessor:
     window: np.ndarray = field(default=None)  # error function window for input video frame
 
     def setWindow(self, w: int, h: int):
-        # create a grid for an error function window
-        x = np.linspace(-1.0, 1.0, w)
-        y = np.linspace(-1.0, 1.0, h)
-        x, y = np.meshgrid(x, y)
-        # Create a window using the error function
-        window_x = erf_vectorized((x + 1) / self.taperWidth) * erf_vectorized((1 - x) / self.taperWidth)
-        window_y = erf_vectorized((y + 1) / self.taperWidth) * erf_vectorized((1 - y) / self.taperWidth)
-        self.window = window_x * window_y
+        self.window = error_function_window((h, w), self.taperWidth)
 
     def prepareFrame(self, frame: np.ndarray) -> np.ndarray:
         """Crop, scale, and normalize the captured frame."""
@@ -230,10 +218,9 @@ class FrameProcessor:
         if self.window is None:
             h, w = frame.shape
             self.setWindow(w, h)
-        # Apply the window to the frame
+        # Keep the cached window for the live camera path.
         frame *= self.window
         frame -= frame.min()
-        # expand range
         return normalizeUnit(frame)
 
     # static for use in test cases
@@ -241,22 +228,8 @@ class FrameProcessor:
         """Perform FFT on the frame, with optional line removal.
         Its declared static for easier (UI free) testing."""
 
-        dft = cv2.dft(frame, flags=cv2.DFT_COMPLEX_OUTPUT)
-        # Calculate magnitude spectrum (from complex)
-        dft = dft[:, :, 0] ** 2 + dft[:, :, 1] ** 2
-        # Shift the zero-frequency component to the center
-        dft_shifted = np.fft.fftshift(dft)
-        # Use log scale for better visualization
-        fft_log = np.log1p(dft_shifted)
-
-        # Optionally remove central lines to enhance dynamic range in display
-        if self.killCenterLines:
-            h, w = fft_log.shape[:2]
-            fft_log[h // 2 - 1 : h // 2 + 1, :] = fft_log[h // 2 + 1 : h // 2 + 3, :]
-            fft_log[:, w // 2 - 1 : w // 2 + 1] = fft_log[:, w // 2 + 1 : w // 2 + 3]
-
-        # Normalize and convert back to NumPy array for display
-        return normalizeUnit(fft_log)
+        spectrum = compute_fourier_spectrum(frame, representation="power")
+        return spectrum_for_display(spectrum, scaling="log", suppress_lines=self.killCenterLines)
 
     def __call__(self, frame) -> Tuple[np.ndarray]:
         """Process a single image with preparations resulting in the fourier transformed image.

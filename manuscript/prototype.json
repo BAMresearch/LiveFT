@@ -1,0 +1,46 @@
+{
+  "patterns": [
+    {
+      "label": "Small circle",
+      "source": "../images/singleObjects/smallSphere.pdf",
+      "page": 0
+    },
+    {
+      "label": "Large circle",
+      "source": "../images/singleObjects/largeSphere.pdf",
+      "page": 0
+    },
+    {
+      "label": "Elongated ellipse",
+      "source": "../images/singleObjects/ellipsoid.pdf",
+      "page": 0
+    },
+    {
+      "label": "Square lattice",
+      "source": "../images/arrays/squareArray.pdf",
+      "page": 0
+    }
+  ],
+  "render": {
+    "dpi": 180,
+    "field_of_view": "center-square",
+    "image_size": [768, 768]
+  },
+  "processing": {
+    "window": true,
+    "taper_width": 0.2,
+    "representation": "power",
+    "display_scaling": "log",
+    "gamma": 1.0,
+    "suppress_center_lines": false
+  },
+  "layout": {
+    "dpi": 300,
+    "width_inches": 7.2,
+    "row_height_inches": 2.0
+  },
+  "output": {
+    "path": "generated/liveft_prototype.pdf",
+    "png_preview": "generated/liveft_prototype.png"
+  }
+}
